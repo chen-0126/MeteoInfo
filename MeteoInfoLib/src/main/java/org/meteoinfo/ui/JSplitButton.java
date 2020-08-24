@@ -30,7 +30,7 @@ import javax.swing.*;
  *
  * @author Naveed Quadri
  */
-public class JSplitButton extends JButton implements MouseMotionListener, MouseListener, ActionListener, Serializable {
+public class JSplitButton extends JToggleButton implements MouseMotionListener, MouseListener, ActionListener, Serializable {
 
     private int separatorSpacing = 4;
     private int splitWidth = 22;
@@ -199,6 +199,18 @@ public class JSplitButton extends JButton implements MouseMotionListener, MouseL
     public void setSplitWidth(int splitWidth) {
         this.splitWidth = splitWidth;
     }
+
+    /**
+     * Get split rectangle
+     * @return Split rectangle
+     */
+    public Rectangle getSplitRectangle() { return this.splitRectangle; }
+
+    /**
+     * Get if the mouse point on split rectangle
+     * @return Boolean
+     */
+    public boolean isOnSplit() { return this.onSplit; }
 
     /**
      * gets the size of the arrow.

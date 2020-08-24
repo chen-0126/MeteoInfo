@@ -15,15 +15,15 @@ package org.meteoinfo.data.mapdata;
 
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.table.JTableHeader;
+
+import com.formdev.flatlaf.extras.SVGUtils;
 import org.meteoinfo.table.DataTable;
 import org.meteoinfo.table.DataTableModel;
 import org.meteoinfo.ndarray.DataType;
@@ -48,12 +48,7 @@ public class FrmAttriData extends javax.swing.JFrame {
         initComponents();
         
         this.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        BufferedImage image = null;
-        try {
-            image = ImageIO.read(this.getClass().getResource("/images/AttributeTable.png"));
-            this.setIconImage(image);
-        } catch (Exception e) {
-        }    
+        this.setIconImages(SVGUtils.createWindowIconImages("/org/meteoinfo/icons/table.svg"));
 
         //this.jTable1.setColumnSelectionAllowed(true);
         //this.jTable1.setRowSelectionAllowed(false);        
@@ -66,10 +61,10 @@ public class FrmAttriData extends javax.swing.JFrame {
                     jTable1.clearSelection();
                 }
 
-                //获取点击的列索引
+                //Get column index of the mouse point
                 int pick = header.columnAtPoint(e.getPoint());
 
-                //设置选择模型
+                //set select model
                 //jTable1.addColumnSelectionInterval(pick, pick);
                 jTable1.setColumnSelectionAllowed(true);
                 jTable1.setRowSelectionAllowed(false);

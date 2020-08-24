@@ -43,7 +43,7 @@
             <id>ebi</id>
             <name>ebiRepo</name>
             <url>http://www.ebi.ac.uk/intact/maven/nexus/content/repositories/ebi-repo/</url>
-        </repository>        
+        </repository>
     </repositories>
     
     <dependencies>
@@ -157,6 +157,21 @@
             <artifactId>slf4j-simple</artifactId>
             <version>1.7.19</version>
         </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>0.40</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+            <version>0.40</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>svgSalamander</artifactId>
+            <version>1.1.2.1</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -166,7 +181,7 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.1.1</version>
             </plugin>            
-<!--            <plugin>
+            <!--<plugin>
                 <groupId>org.apache.maven.plugins</groupId>  
                 <artifactId>maven-dependency-plugin</artifactId>  
                 <version>3.1.1</version>  
@@ -182,7 +197,7 @@
                         </configuration>  
                     </execution>  
                 </executions>  
-            </plugin>                        -->
+            </plugin>-->
             <!--<plugin>
                 <inherited>true</inherited>
                 <artifactId>maven-javadoc-plugin</artifactId>
