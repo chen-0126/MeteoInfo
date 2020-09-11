@@ -47,13 +47,9 @@ public class FrmSymDifference extends javax.swing.JDialog {
             if (layer.getLayerType() == LayerTypes.VectorLayer) {
                 this._vLayers.add((VectorLayer) layer);
                 this.jComboBox_SubjectLayer.addItem(layer.getLayerName());
-                switch (layer.getShapeType()) {
-                    case Polygon:
-                    case PolygonZ:
-                    case PolygonM:
-                        this._polygonLayers.add((VectorLayer) layer);
-                        this.jComboBox_SymDifferenceLayer.addItem(layer.getLayerName());
-                        break;
+                if (layer.getShapeType().isPolygon()) {
+                    this._polygonLayers.add((VectorLayer) layer);
+                    this.jComboBox_SymDifferenceLayer.addItem(layer.getLayerName());
                 }
             }
         }
@@ -175,7 +171,7 @@ public class FrmSymDifference extends javax.swing.JDialog {
             clipShapes = (List<PolygonShape>)clipLayer.getShapes();
         }
         VectorLayer newLayer = fromLayer.symDifference(clipShapes, onlySel);
-        newLayer.setLayerName("Intersection_" + newLayer.getLayerName());
+        newLayer.setLayerName("SymDifference_" + newLayer.getLayerName());
         _parent.getMapDocument().getActiveMapFrame().addLayer(newLayer);
 
         //---- Hide progressbar                      

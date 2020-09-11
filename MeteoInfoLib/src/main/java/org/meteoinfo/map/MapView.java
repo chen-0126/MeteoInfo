@@ -159,8 +159,6 @@ import org.freehep.graphicsio.emf.EMFGraphics2D;
 import org.freehep.graphicsio.ps.PSGraphics2D;
 import org.meteoinfo.data.mapdata.webmap.GeoPosition;
 import org.meteoinfo.data.mapdata.webmap.IWebMapPanel;
-import org.meteoinfo.data.mapdata.webmap.Tile;
-import org.meteoinfo.data.mapdata.webmap.TileFactoryInfo;
 import org.meteoinfo.data.mapdata.webmap.TileLoadListener;
 import org.meteoinfo.data.mapdata.webmap.WebMapProvider;
 import static org.meteoinfo.drawing.Draw.getHatchImage;
@@ -172,24 +170,14 @@ import org.meteoinfo.global.event.UndoEditEvent;
 import org.meteoinfo.global.util.BigDecimalUtil;
 import org.meteoinfo.global.util.GeoUtil;
 import org.meteoinfo.image.ImageUtil;
-import static org.meteoinfo.layer.LayerDrawType.Barb;
-import static org.meteoinfo.layer.LayerDrawType.StationModel;
-import static org.meteoinfo.layer.LayerDrawType.Streamline;
-import static org.meteoinfo.layer.LayerDrawType.Vector;
 import org.meteoinfo.layer.VisibleScale;
 import org.meteoinfo.layer.WebMapLayer;
 import org.meteoinfo.legend.ArrowBreak;
 import org.meteoinfo.legend.LegendType;
-import static org.meteoinfo.legend.LegendType.GraduatedColor;
-import static org.meteoinfo.legend.LegendType.SingleSymbol;
-import static org.meteoinfo.legend.LegendType.UniqueValue;
 import org.meteoinfo.projection.ProjectionUtil;
 import org.meteoinfo.projection.Reproject;
 import org.meteoinfo.shape.ChartGraphic;
 import org.meteoinfo.shape.PointZShape;
-import static org.meteoinfo.shape.ShapeTypes.CurveLine;
-import static org.meteoinfo.shape.ShapeTypes.PointZ;
-import static org.meteoinfo.shape.ShapeTypes.Polyline;
 import org.meteoinfo.shape.StationModelShape;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
@@ -4867,7 +4855,10 @@ public class MapView extends JPanel implements IWebMapPanel {
                     sPoint.X = (float) xy[0];
                     sPoint.Y = (float) xy[1];
 
-                    String vStr = aLayer.getCellValue(aLS.getFieldName(), shapeIdx).toString().trim();
+                    aPB = (ArrowBreak) aLS.getLegendBreak(aArraw.getLegendIndex());
+                    Draw.drawArraw(sPoint, aArraw, aPB, g, zoom);
+
+                    /*String vStr = aLayer.getCellValue(aLS.getFieldName(), shapeIdx).toString().trim();
                     if (vStr.isEmpty()) {
                         value = 0;
                     } else {
@@ -4883,7 +4874,7 @@ public class MapView extends JPanel implements IWebMapPanel {
                             //Draw.drawArraw(aColor, sPoint, aArraw, g, zoom);
                             Draw.drawArraw(sPoint, aArraw, aPB, g, zoom);
                         }
-                    }
+                    }*/
                 }
                 break;
         }
@@ -5037,14 +5028,16 @@ public class MapView extends JPanel implements IWebMapPanel {
                         }
                     }
                 } else {
-                    for (ColorBreak aCB : aLS.getLegendBreaks()) {
+                    /*for (ColorBreak aCB : aLS.getLegendBreaks()) {
                         PointBreak aPB = (PointBreak) aCB;
                         if (value == Double.parseDouble(aPB.getStartValue().toString()) || (value > Double.parseDouble(aPB.getStartValue().toString())
                                 && value < Double.parseDouble(aPB.getEndValue().toString()))) {
                             //Draw.drawWindBarb(aColor, sPoint, aWB, g, bSize);
                             Draw.drawWindBarb(sPoint, aWB, aPB, g);
                         }
-                    }
+                    }*/
+                    PointBreak pointBreak = (PointBreak) aLS.getLegendBreak(aWB.getLegendIndex());
+                    Draw.drawWindBarb(sPoint, aWB, pointBreak, g);
                 }
 
                 shapeIdx += 1;
