@@ -101,7 +101,14 @@ class NDArray(object):
                 break
             i += 1
         if allint:
-            return self._array.getObject(aindex)
+            if self.dtype == _dtype.char:
+                return self._array.getString(aindex)
+            else:
+                r = self._array.getObject(aindex)
+                if isinstance(r, Complex):
+                    return complex(r.getReal(), r.getImaginary())
+                else:
+                    return r
             
         if self.ndim == 0:
             return self
@@ -207,11 +214,14 @@ class NDArray(object):
                 
         if r.getSize() == 1:
             iter = r.getIndexIterator()
-            r = iter.getObjectNext()
-            if isinstance(r, Complex):
-                return complex(r.getReal(), r.getImaginary())
+            if self.dtype == _dtype.char:
+                return iter.getStringNext()
             else:
-                return r
+                r = iter.getObjectNext()
+                if isinstance(r, Complex):
+                    return complex(r.getReal(), r.getImaginary())
+                else:
+                    return r
         else:
             for i in flips:
                 r = r.flip(i)
@@ -470,6 +480,32 @@ class NDArray(object):
         '''
         r = ArrayUtil.copyToNDJavaArray(self._array, dtype)
         return r
+
+    def to_encoding(self, encoding):
+        '''
+        Convert char array to encoding from UTF-8
+
+        :param encoding: (*string*) Encoding string.
+
+        :returns: (*array*) Converted array.
+        '''
+        if self.dtype == _dtype.char:
+            return NDArray(ArrayUtil.convertEncoding(self._array, encoding))
+        else:
+            return None
+
+    def get_string(self, encoding='UTF-8'):
+        '''
+        Get string from a char array.
+
+        :param encoding: (*string*) Encoding string.
+
+        :returns: (*string*) String.
+        '''
+        if self.dtype == _dtype.char:
+            return ArrayUtil.getString(self._array, encoding)
+        else:
+            return None
     
     def in_values(self, other):
         '''
@@ -603,6 +639,21 @@ class NDArray(object):
             return ArrayMath.sum(self._array)
         else:
             r = ArrayMath.sum(self._array, axis)
+            return NDArray(r)
+
+    def cumsum(self, axis=None):
+        '''
+        Return the cumulative sum of the elements along a given axis.
+
+        :param axis: (*int*) Axis along which the standard deviation is computed.
+            The default is to compute the standard deviation of the flattened array.
+
+        returns: (*array_like*) Sum result
+        '''
+        if axis is None:
+            return ArrayMath.cumsum(self.flatten()._array, 0)
+        else:
+            r = ArrayMath.cumsum(self._array, axis)
             return NDArray(r)
             
     def prod(self):

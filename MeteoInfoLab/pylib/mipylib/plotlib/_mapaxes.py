@@ -7,10 +7,10 @@
 #-----------------------------------------------------
 
 import os
+import numbers
 
 from org.meteoinfo.chart import ChartScaleBar, ChartNorthArrow
 from org.meteoinfo.chart.plot import MapPlot, GraphicFactory
-from org.meteoinfo.math import ArrayUtil
 from org.meteoinfo.data.meteodata import DrawMeteoData
 from org.meteoinfo.map import MapView
 from org.meteoinfo.legend import BreakTypes, LegendManage, LegendScheme, LegendType
@@ -209,6 +209,8 @@ class MapAxes(Axes):
         '''
         Add a circle patch
         '''
+        if not kwargs.has_key('facecolor'):
+            kwargs['facecolor'] = None
         lbreak, isunique = plotutil.getlegendbreak('polygon', **kwargs)
         circle = self.axes.addCircle(xy[0], xy[1], radius, lbreak)
         return circle
@@ -338,7 +340,7 @@ class MapAxes(Axes):
                 cna.setDrawNeatline(True)
         self.axes.setNorthArrow(cna)
         
-    def grid(self, b=None, which='major', axis='both', **kwargs):
+    def grid(self, b=None, **kwargs):
         """
         Turn the aexs grids on or off.
         
@@ -350,8 +352,9 @@ class MapAxes(Axes):
             gridlines are drawn.
         :param kwargs: *kwargs* are used to set the grid line properties.
         """
+
         if self.islonlat():
-            super(MapAxes, self).grid(b, which, axis, **kwargs)
+            super(MapAxes, self).grid(b, **kwargs)
         else:
             mapframe = self.axes.getMapFrame()
             gridline = mapframe.isDrawGridLine()
@@ -463,10 +466,10 @@ class MapAxes(Axes):
         elif isinstance(args[0], MILayer):
             layer = args[0]
             islayer = True
-        
+
+        visible = kwargs.pop('visible', True)
         if islayer:    
-            layer = layer.layer   
-            visible = kwargs.pop('visible', True)
+            layer = layer.layer
             layer.setVisible(visible)
             order = kwargs.pop('order', None)
             if layer.getLayerType() == LayerTypes.ImageLayer:
@@ -489,6 +492,8 @@ class MapAxes(Axes):
                             geometry = 'line'
                         elif btype == BreakTypes.PolygonBreak:
                             geometry = 'polygon'
+                            if not kwargs.has_key('facecolor'):
+                                kwargs['facecolor'] = None
                         lb, isunique = plotutil.getlegendbreak(geometry, **kwargs)
                         layer.getLegendScheme().getLegendBreaks().set(0, lb)
                 else:
@@ -554,25 +559,46 @@ class MapAxes(Axes):
                 lat = args[0]
                 lon = args[1]
                 displaytype = kwargs.pop('displaytype', 'line')
-                if isinstance(lat, (int, float)):
+                if isinstance(lat, numbers.Number):
                     displaytype = 'point'
                 else:
                     if len(lat) == 1:
                         displaytype = 'point'
-                    else:
-                        if isinstance(lon, (NDArray, DimArray)):
-                            lon = lon.aslist()
-                        if isinstance(lat, (NDArray, DimArray)):
-                            lat = lat.aslist()
+                    if isinstance(lon, (list, tuple)):
+                        lon = np.array(lon)
+                    if isinstance(lat, (list, tuple)):
+                        lat = np.array(lat)
 
                 lbreak, isunique = plotutil.getlegendbreak(displaytype, **kwargs)
                 iscurve = kwargs.pop('iscurve', False)
                 if displaytype == 'point':
-                    graphic = self.axes.addPoint(lat, lon, lbreak)
+                    #graphic = self.axes.addPoint(lat, lon, lbreak)
+                    if isinstance(lon, NDArray):
+                        graphic = GraphicFactory.createPoints(lon._array, lat._array, lbreak)
+                    else:
+                        graphic = GraphicFactory.createPoint(lon, lat, lbreak)
                 elif displaytype == 'polyline' or displaytype == 'line':
-                    graphic = self.axes.addPolyline(lat, lon, lbreak, iscurve)
+                    #graphic = self.axes.addPolyline(lat, lon, lbreak, iscurve)
+                    graphic = GraphicFactory.createLineString(lon._array, lat._array, lbreak, iscurve)
                 elif displaytype == 'polygon':
-                    graphic = self.axes.addPolygon(lat, lon, lbreak)
+                    #graphic = self.axes.addPolygon(lat, lon, lbreak)
+                    graphic = GraphicFactory.createPolygons(lon._array, lat._array, lbreak)
+
+                if graphic.getNumGraphics() == 1:
+                    graphic = graphic.getGraphicN(0)
+
+                if visible:
+                    if graphic.isCollection():
+                        if self.islonlat():
+                            self.axes.addGraphics(graphic)
+                        else:
+                            graphic = self.axes.addGraphics(graphic, migeo.projinfo())
+                    else:
+                        if self.islonlat():
+                            self.axes.addGraphic(graphic)
+                        else:
+                            graphic = self.axes.addGraphic(graphic, migeo.projinfo())
+
             return graphic
             
     def plot(self, *args, **kwargs):
@@ -588,7 +614,11 @@ class MapAxes(Axes):
         :returns: (*VectoryLayer*) Line VectoryLayer.
         """
         fill_value = kwargs.pop('fill_value', -9999.0)
-        proj = kwargs.pop('proj', None)    
+        proj = kwargs.pop('proj', None)
+        if proj is None:
+            is_lonlat = True
+        else:
+            is_lonlat = proj.isLonLat()
         n = len(args) 
         xdatalist = []
         ydatalist = []    
@@ -706,15 +736,23 @@ class MapAxes(Axes):
                                 lines.append(ncb)
                                 idx += 1
                             ls = LegendScheme(lines)
-                layer = DrawMeteoData.createPolylineLayer(xdatalist, ydatalist, ls, \
-                    'Plot_lines', 'ID', -180, 180)
+                if is_lonlat:
+                    layer = DrawMeteoData.createPolylineLayer(xdatalist, ydatalist, ls, \
+                        'Plot_lines', 'ID', -180, 180)
+                else:
+                    layer = DrawMeteoData.createPolylineLayer(xdatalist, ydatalist, ls, \
+                                                              'Plot_lines', 'ID')
             else:
                 xdata = plotutil.getplotdata(xdatalist[0])
                 ydata = plotutil.getplotdata(ydatalist[0])
                 zdata = plotutil.getplotdata(zvalues)
-                layer = DrawMeteoData.createPolylineLayer(xdata, ydata, zdata, ls, \
-                    'Plot_lines', 'ID', -180, 180)
-            if (proj != None):
+                if is_lonlat:
+                    layer = DrawMeteoData.createPolylineLayer(xdata, ydata, zdata, ls, \
+                        'Plot_lines', 'ID', -180, 180)
+                else:
+                    layer = DrawMeteoData.createPolylineLayer(xdata, ydata, zdata, ls, \
+                                                              'Plot_lines', 'ID')
+            if not proj is None:
                 layer.setProjInfo(proj)
          
             # Add layer
@@ -972,6 +1010,28 @@ class MapAxes(Axes):
             self.axes.setExtent(layer.getExtent().clone())
         
         return MILayer(layer)
+
+    def text(self, x, y, s, **kwargs):
+        """
+        Add text to the axes. Add text in string *s* to axis at location *x* , *y* , data
+        coordinates.
+
+        :param x: (*float*) Data x coordinate.
+        :param y: (*float*) Data y coordinate.
+        :param s: (*string*) Text.
+        :param fontname: (*string*) Font name. Default is ``Arial`` .
+        :param fontsize: (*int*) Font size. Default is ``14`` .
+        :param bold: (*boolean*) Is bold font or not. Default is ``False`` .
+        :param color: (*color*) Tick label string color. Default is ``black`` .
+        :param coordinates=['axes'|'figure'|'data'|'inches']: (*string*) Coordinate system and units for
+            *X, Y*. 'axes' and 'figure' are normalized coordinate system with 0,0 in the lower left and
+            1,1 in the upper right, 'data' are the axes data coordinates (Default value); 'inches' is
+            position in the figure in inches, with 0,0 at the lower left corner.
+        """
+        ctext = plotutil.text(x, y, s, **kwargs)
+        islonlat = kwargs.pop('islonlat', True)
+        self.axes.addText(ctext, islonlat)
+        return ctext
         
     def contour(self, *args, **kwargs):  
         """
@@ -1065,6 +1125,8 @@ class MapAxes(Axes):
             args = args[3:]
         ls = plotutil.getlegendscheme(args, a.min(), a.max(), **kwargs)
         ls = ls.convertTo(ShapeTypes.Polygon)
+        if not kwargs.has_key('edgecolor'):
+            kwargs['edgecolor'] = None
         plotutil.setlegendscheme(ls, **kwargs)
         isadd = kwargs.pop('isadd', True)
         smooth = kwargs.pop('smooth', True)
@@ -1238,6 +1300,8 @@ class MapAxes(Axes):
             
         ls = plotutil.getlegendscheme(args, a.min(), a.max(), **kwargs)   
         ls = ls.convertTo(ShapeTypes.Polygon)
+        if not kwargs.has_key('edgecolor'):
+            kwargs['edgecolor'] = None
         plotutil.setlegendscheme(ls, **kwargs)
             
         if proj is None or proj.isLonLat():
@@ -1572,9 +1636,11 @@ class MapAxes(Axes):
         proj = kwargs.pop('proj', None)
         size = kwargs.pop('size', 12)
         surface = kwargs.pop('surface', True)
-        ls = LegendManage.createSingleSymbolLegendScheme(ShapeTypes.Point, Color.blue, size)
+        color = kwargs.pop('color', 'b')
+        color = plotutil.getcolor(color)
+        ls = LegendManage.createSingleSymbolLegendScheme(ShapeTypes.Point, color, size)
         layer = DrawMeteoData.createStationModelLayer(smdata, ls, 'stationmodel', surface)
-        if (proj != None):
+        if not proj is None:
             layer.setProjInfo(proj)
      
         # Add layer
@@ -1627,8 +1693,3 @@ class MapAxes(Axes):
         '''
         mapview = self.axes.getMapView()
         mapview.moveGraphic(graphic, x, y, coordinates == 'screen')
-
-########################################################3
-class Test():
-    def test():
-        print 'Test...'        

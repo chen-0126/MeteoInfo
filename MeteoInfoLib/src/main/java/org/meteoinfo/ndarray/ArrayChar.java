@@ -326,7 +326,8 @@ public class ArrayChar extends Array {
      */
     public String getString(int index) {
         Index ima = getIndex();
-        return getString(ima.set(index));
+        ima.setCurrentCounter(index);
+        return getString(ima);
     }
 
     /**
@@ -352,7 +353,9 @@ public class ArrayChar extends Array {
      * @throws IllegalArgumentException if rank != 1
      */
     public String getString(Index ima) {
-        int rank = getRank();
+        return String.valueOf(getChar(ima));
+
+        /*int rank = getRank();
         if (rank == 0) {
             throw new IllegalArgumentException("ArayChar.getString rank must not be 0");
         }
@@ -372,7 +375,7 @@ public class ArrayChar extends Array {
             }
             count++;
         }
-        return new String(carray, 0, count);
+        return new String(carray, 0, count);*/
     }
 
     /**

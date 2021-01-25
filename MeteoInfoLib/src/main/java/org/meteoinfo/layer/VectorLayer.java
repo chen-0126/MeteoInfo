@@ -22,6 +22,7 @@ import org.meteoinfo.global.GenericFileFilter;
 import org.meteoinfo.global.MIMath;
 import org.meteoinfo.global.PointD;
 import org.meteoinfo.global.colors.ColorUtil;
+import org.meteoinfo.projection.info.ProjectionInfo;
 import org.meteoinfo.table.DataColumn;
 import org.meteoinfo.table.DataRow;
 import org.meteoinfo.ndarray.DataType;
@@ -107,6 +108,7 @@ public class VectorLayer extends MapLayer {
     private AttributeTable _originAttributeTable = null;
     private List<Graphic> _originLabelPoints = null;
     private List<ChartGraphic> _originChartPoints = null;
+    private ProjectionInfo originProjInfo = null;
     private boolean _projected = false;
     private boolean editing = false;
     private Shape editingShape;
@@ -348,6 +350,14 @@ public class VectorLayer extends MapLayer {
      */
     public void setDrawingZoom(float zoom) {
         _drawingZoom = zoom;
+    }
+
+    /**
+     * Get origin ProjectionInfo
+     * @return ProjectionInfo
+     */
+    public ProjectionInfo getOriginProjInfo() {
+        return this.originProjInfo == null ? this._projInfo : this.originProjInfo;
     }
 
     /**
@@ -2255,6 +2265,7 @@ public class VectorLayer extends MapLayer {
 
         _originLabelPoints = new ArrayList<>(_labelPoints);
         _originChartPoints = new ArrayList<>(_chartPoints);
+        this.originProjInfo = (ProjectionInfo) this._projInfo.clone();
         _projected = true;
     }
 
@@ -2270,6 +2281,7 @@ public class VectorLayer extends MapLayer {
 
         _labelPoints = _originLabelPoints;
         _chartPoints = _originChartPoints;
+        this._projInfo = (ProjectionInfo) this.originProjInfo.clone();
         updateExtent();
     }
 
@@ -2877,11 +2889,13 @@ public class VectorLayer extends MapLayer {
             case GraduatedColor:
                 if (!ls.isGeometry()) {
                     shapeIdx = 0;
-                    int idx = 0;
+                    int idx = -1;
                     for (Shape aShape : this.getShapes()) {
                         String vStr = this.getCellValue(ls.getFieldName(), shapeIdx).toString();
                         double v = Double.parseDouble(vStr);
-                        if (v <= ls.getMinValue())
+                        if (Double.isNaN(v))
+                            idx = -1;
+                        else if (v <= ls.getMinValue())
                             idx = 0;
                         else if (v >= ls.getMaxValue())
                             idx = ls.getBreakNum() - 1;

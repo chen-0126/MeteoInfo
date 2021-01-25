@@ -232,9 +232,12 @@ class DataFrame(object):
                     eidx = self.shape[0] + eidx                    
             step = 1 if k.step is None else k.step
             rowkey = Range(sidx, eidx, step)
-        elif isinstance(k, (list,tuple,np.NDArray)):
-            if isinstance(k[0], int):
-                rowkey = k
+        elif isinstance(k, (list,tuple,np.NDArray,series.Series)):
+            if isinstance(k[0], (int, bool)):
+                if isinstance(k, (list, tuple)):
+                    rowkey = k
+                else:
+                    rowkey = k.asarray()
             else:
                 tlist = []
                 for tstr in k:
@@ -507,7 +510,9 @@ class DataFrame(object):
             step = 1 if k.step is None else k.step
             rowkey = Range(sidx, eidx, step)
         elif isinstance(k, list):
-            rowkey = k            
+            rowkey = k
+        elif isinstance(k, np.NDArray):
+            rowkey = k.aslist()
         else:
             return None
                    
@@ -533,6 +538,8 @@ class DataFrame(object):
                 colkey = Range(sidx, eidx, step)        
             elif isinstance(k, list):
                 colkey = k
+            elif isinstance(k, np.NDArray):
+                colkey = k.aslist()
             else:
                 return None
         
@@ -660,6 +667,12 @@ class DataFrame(object):
         if isinstance(value, (list, tuple)):
             if isinstance(value[0], datetime.datetime):
                 value = miutil.jdatetime(value)
+            value = np.array(value)
+        if isinstance(value, Index):
+            if isinstance(value[0], datetime.datetime):
+                value = miutil.jdatetime(value.data)
+            else:
+                value = value.data
             value = np.array(value)
         if isinstance(value, np.NDArray):
             value = value._array 

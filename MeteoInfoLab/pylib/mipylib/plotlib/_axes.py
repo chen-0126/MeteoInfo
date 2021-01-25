@@ -140,6 +140,13 @@ class Axes(object):
     @property
     def axestype(self):
         return 'cartesian'
+
+    @property
+    def ndim(self):
+        """
+        Dimension number property
+        """
+        return 2
     
     def get_type(self):
         '''
@@ -966,7 +973,7 @@ class Axes(object):
         sy = self.figure.get_size()[1] - sy
         return sx, sy
         
-    def grid(self, b=None, which='major', axis='both', **kwargs):
+    def grid(self, b=None, **kwargs):
         """
         Turn the aexs grids on or off.
         
@@ -979,20 +986,21 @@ class Axes(object):
         :param kwargs: *kwargs* are used to set the grid line properties.
         """
         gridline = self.axes.getGridLine()
-        isDraw = gridline.isDrawXLine()
+        is_draw = gridline.isDrawXLine()
         if b is None:
-            isDraw = not gridline.isDrawXLine()
+            is_draw = not gridline.isDrawXLine()
         elif b == True or b == 'on':
-            isDraw = True
+            is_draw = True
         elif b == False or b == 'on':
-            isDraw = False
+            is_draw = False
+        axis = kwargs.pop('axis', 'both')
         if axis == 'both':
-            gridline.setDrawXLine(isDraw)
-            gridline.setDrawYLine(isDraw)
+            gridline.setDrawXLine(is_draw)
+            gridline.setDrawYLine(is_draw)
         elif axis == 'x':
-            gridline.setDrawXLine(isDraw)
+            gridline.setDrawXLine(is_draw)
         elif axis == 'y':
-            gridline.setDrawYLine(isDraw)
+            gridline.setDrawYLine(is_draw)
         color = kwargs.pop('color', None)
         if not color is None:
             c = plotutil.getcolor(color)
@@ -1131,14 +1139,14 @@ class Axes(object):
                         styles.append(arg)
                         c = 'x'
                     else:
-                        styles.append('-')
+                        styles.append(None)
                         xdatalist.append(arg)
                         c = 'y'
         if len(styles) == 0:
             styles = None
         else:
             while len(styles) < len(xdatalist):
-                styles.append('-')
+                styles.append(None)
         
         #Set plot data styles
         zvalues = kwargs.pop('zvalues', None)
@@ -1151,21 +1159,34 @@ class Axes(object):
                 else:
                     lines = legend.getLegendBreaks()
             else:
-                if styles != None:
+                if not styles is None:
+                    colors = plotutil.makecolors(len(styles))
                     for i in range(0, len(styles)):
                         label = kwargs.pop('label', 'S_' + str(i + 1))
-                        line = plotutil.getplotstyle(styles[i], label, **kwargs)
+                        if styles[i] is None:
+                            line = plotutil.getlegendbreak('line', **kwargs)[0]
+                            line.setCaption(label)
+                            line.setColor(colors[i])
+                        else:
+                            line = plotutil.getplotstyle(styles[i], label, **kwargs)
                         lines.append(line)
                 else:
                     snum = len(xdatalist)
                     colors = kwargs.pop('colors', None)
-                    if not colors is None:
+                    if colors is None:
+                        color = kwargs.pop('color', None)
+                        if color is None:
+                            colors = plotutil.makecolors(snum)
+                        else:
+                            color = plotutil.getcolor(color)
+                            colors = [color] * snum
+                    else:
                         snum = len(colors) if len(colors) > snum else snum
                     for i in range(0, snum):
                         label = kwargs.pop('label', 'S_' + str(i + 1))
                         line = plotutil.getlegendbreak('line', **kwargs)[0]
                         line.setCaption(label)
-                        if not colors is None and i < len(colors):
+                        if i < len(colors):
                             line.setColor(plotutil.getcolor(colors[i]))
                         lines.append(line) 
         else:
@@ -1279,8 +1300,7 @@ class Axes(object):
         self.axes.setAutoExtent()
         return graphics 
             
-    def scatter(self, x, y, s=8, c='b', norm=None, vmin=None, vmax=None,
-                alpha=None, linewidth=None, verts=None, hold=None, **kwargs):
+    def scatter(self, *args, **kwargs):
         """
         Make a scatter plot of x vs y, where x and y are sequence like objects of the same lengths.
         
@@ -1296,6 +1316,18 @@ class Axes(object):
         
         :returns: Points legend break.
         """
+        n = len(args)
+        if n == 1:
+            a = args[0]
+            y = a.dimvalue(0)
+            x = a.dimvalue(1)
+        else:
+            x = args[0]
+            y = args[1]
+
+        s = kwargs.pop('s', 8)
+        c = kwargs.pop('c', 'b')
+
         #Add data series
         label = kwargs.pop('label', 'S_0')
         xdata = plotutil.getplotdata(x)
@@ -1340,6 +1372,7 @@ class Axes(object):
             #Create graphics
             graphics = GraphicFactory.createPoints(xdata, ydata, c.asarray(), ls)
         else:
+            alpha = kwargs.pop('alpha', None)
             colors = plotutil.getcolors(c, alpha)
             edgecolors = kwargs.pop('edgecolors', pb.getOutlineColor())
             if edgecolors is None:
@@ -2202,6 +2235,8 @@ class Axes(object):
             else:    
                 ls = LegendManage.createLegendScheme(gdata.min(), gdata.max(), cmap)
         ls = ls.convertTo(ShapeTypes.Polygon)
+        if not kwargs.has_key('edgecolor'):
+            kwargs['edgecolor'] = None
         plotutil.setlegendscheme(ls, **kwargs)
         smooth = kwargs.pop('smooth', True)
         igraphic = GraphicFactory.createContourPolygons(gdata.data, ls, smooth)
@@ -2327,11 +2362,9 @@ class Axes(object):
             string, like ‘r’ or ‘red’, all levels will be plotted in this color. If a tuple of matplotlib 
             color args (string, float, rgb, etc), different levels will be plotted in different colors in 
             the order specified.
-        :param fill_value: (*float*) Fill_value. Default is ``-9999.0``.
         
         :returns: (*GraphicCollection*) Polygon graphic collection.
         '''
-        fill_value = kwargs.pop('fill_value', -9999.0)
         n = len(args) 
         if n <= 2:
             a = args[0]
@@ -2347,6 +2380,8 @@ class Axes(object):
             x, y = np.meshgrid(x, y)            
         ls = plotutil.getlegendscheme(args, a.min(), a.max(), **kwargs)   
         ls = ls.convertTo(ShapeTypes.Polygon)
+        if not kwargs.has_key('edgecolor'):
+            kwargs['edgecolor'] = None
         plotutil.setlegendscheme(ls, **kwargs)
         graphics = GraphicFactory.createPColorPolygons(x.asarray(), y.asarray(), a.asarray(), ls)            
         visible = kwargs.pop('visible', True)
@@ -2514,6 +2549,25 @@ class Axes(object):
         self.axes.setAutoExtent()
         
         return ctext, graphic
+
+    def axhline(self, y=0, xmin=0, xmax=1, **kwargs):
+        """
+        Add a horizontal line across the axis.
+        Parameters
+        ----------
+        y : float, default: 0
+            y position in data coordinates of the horizontal line.
+        xmin : float, default: 0
+            Should be between 0 and 1, 0 being the far left of the plot, 1 the
+            far right of the plot.
+        xmax : float, default: 1
+            Should be between 0 and 1, 0 being the far left of the plot, 1 the
+            far right of the plot.
+        Returns
+        -------
+        `~matplotlib.lines.Line2D`
+        """
+        pass
     
     def patch(self, x, y=None, **kwargs):
         '''
@@ -2797,6 +2851,8 @@ class Axes(object):
             boxprops.setDrawFill(False)
             boxprops.setOutlineColor(color is None and Color.blue or color)
         else:
+            if not boxprops.has_key('facecolor'):
+                boxprops['facecolor'] = None
             boxprops = plotutil.getlegendbreak('polygon', **boxprops)[0]
         if medianline:
             if medianprops is None:
@@ -2964,7 +3020,7 @@ class Axes(object):
         xticks = self.get_xticks()
         for i in xticks:
             self.plot(xunit * i, yunit * i, color='gray', linestyle='--')
-        self.plot(xunit * std_max, yunit * std_max)
+        self.plot(xunit * std_max, yunit * std_max, color='k')
 
         #plot correlation lines
         values = np.arange(0., 1., 0.1)
@@ -2976,7 +3032,7 @@ class Axes(object):
             if 0 < t < 1:
                 if t == 0.6 or t == 0.9:
                     self.plot([0,x], [0,y], color='gray', linestyle=':')
-                self.plot([x*0.98,x], [y*0.98,y])
+                self.plot([x*0.98,x], [y*0.98,y], color='k')
             x = x * 1.02
             y = y * 1.02
             self.text(x, y, str(t), rotation=np.degrees(theta), yalign='center')
@@ -2990,7 +3046,7 @@ class Axes(object):
             theta = np.acos(t)
             x = np.cos(theta) * std_max
             y = np.sin(theta) * std_max
-            self.plot([x*0.99,x], [y*0.99,y])
+            self.plot([x*0.99,x], [y*0.99,y], color='k')
 
         #plot data
         stddev = np.atleast_2d(stddev)
@@ -3541,7 +3597,7 @@ class Axes(object):
 
         return clegend
         
-    def colorbar(self, mappable, **kwargs):
+    def colorbar(self, mappable=None, **kwargs):
         """
         Add a colorbar to a plot.
         
@@ -3600,14 +3656,17 @@ class Axes(object):
         else:
             labelfont = plotutil.getfont(labelfontdic)
 
-        if isinstance(mappable, MILayer):
-            ls = mappable.legend()
-        elif isinstance(mappable, LegendScheme):
-            ls = mappable
-        elif isinstance(mappable, GraphicCollection):
-            ls = mappable.getLegendScheme()
+        if mappable is None:
+            ls = self.get_legend()
         else:
-            ls = plotutil.makelegend(mappable, **kwargs)
+            if isinstance(mappable, MILayer):
+                ls = mappable.legend()
+            elif isinstance(mappable, LegendScheme):
+                ls = mappable
+            elif isinstance(mappable, GraphicCollection):
+                ls = mappable.getLegendScheme()
+            else:
+                ls = plotutil.makelegend(mappable, **kwargs)
         
         newlegend = kwargs.pop('newlegend', True)
         if newlegend:
@@ -3873,9 +3932,3 @@ class PolarAxes(Axes):
         sy = r[1] + rect.getY()
         sy = self.figure.get_size()[1] - sy
         return sx, sy
-                
-        
-########################################################3
-class Test():
-    def test():
-        print 'Test...'

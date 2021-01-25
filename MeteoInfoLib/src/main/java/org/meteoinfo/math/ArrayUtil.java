@@ -19,6 +19,9 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,16 +40,10 @@ import org.meteoinfo.global.util.BigDecimalUtil;
 import org.meteoinfo.global.util.GlobalUtil;
 import org.meteoinfo.global.util.JDateUtil;
 import org.meteoinfo.io.EndianDataOutputStream;
+import org.meteoinfo.layer.ChartSet;
 import org.meteoinfo.math.spatial.KDTree;
 import org.meteoinfo.math.spatial.KDTree.SearchResult;
-import org.meteoinfo.ndarray.Complex;
-import org.meteoinfo.ndarray.Array;
-import org.meteoinfo.ndarray.DataType;
-import org.meteoinfo.ndarray.Index;
-import org.meteoinfo.ndarray.Index2D;
-import org.meteoinfo.ndarray.IndexIterator;
-import org.meteoinfo.ndarray.InvalidRangeException;
-import org.meteoinfo.ndarray.Range;
+import org.meteoinfo.ndarray.*;
 import org.meteoinfo.shape.PolygonShape;
 
 /**
@@ -571,11 +568,19 @@ public class ArrayUtil {
             }
             return a;
         } else if (d0 instanceof Complex) {
-            Array a = Array.factory(DataType.OBJECT, new int[]{data.size()});
+            Array a = Array.factory(DataType.COMPLEX, new int[]{data.size()});
             Complex d;
             for (int i = 0; i < data.size(); i++) {
                 d = (Complex) data.get(i);
                 a.setObject(i, d);
+            }
+            return a;
+        } else if (d0 instanceof LocalDateTime) {
+            Array a = Array.factory(DataType.DATE, new int[]{data.size()});
+            LocalDateTime d;
+            for (int i = 0; i < data.size(); i++) {
+                d = (LocalDateTime) data.get(i);
+                a.setDate(i, d);
             }
             return a;
         } else if (d0 instanceof List) {
@@ -1335,6 +1340,7 @@ public class ArrayUtil {
 
     // </editor-fold>
     // <editor-fold desc="Output">
+
     /**
      * Array to string
      *
@@ -1349,9 +1355,10 @@ public class ArrayUtil {
         sbuff.append("array(");
         int ndim = a.getRank();
         if (ndim > 1) {
-            sbuff.append("[");
+            for (int i = 0; i < ndim - 1; i++)
+                sbuff.append("[");
         }
-        int i = 0, n = 0;
+
         IndexIterator ii = a.getIndexIterator();
         int shapeIdx = ndim - 1;
         if (shapeIdx < 0) {
@@ -1361,14 +1368,28 @@ public class ArrayUtil {
             return sbuff.toString();
         }
 
+        int[] shape = a.getShape();
+        int[] dims = new int[shape.length];
+        for (int i = dims.length - 1; i >= 0; i--) {
+            if (i == dims.length - 1)
+                dims[i] = shape[i];
+            else
+                dims[i] = dims[i + 1] * shape[i];
+        }
+
         int len = a.getShape()[shapeIdx];
         String dstr;
+        int i = 0, n = 1, nn = 0;
         while (ii.hasNext()) {
             if (i == 0) {
-                if (n > 0) {
+                if (n > 1) {
                     sbuff.append("\n      ");
                 }
                 sbuff.append("[");
+                if (nn > 0) {
+                    for (int j = 0; j < nn; j++)
+                        sbuff.append("[");
+                }
             }
             dstr = ii.getStringNext();
             if (a.getDataType().isBoolean()) {
@@ -1383,8 +1404,18 @@ public class ArrayUtil {
             i += 1;
             if (i == len) {
                 sbuff.append("]");
-                len = a.getShape()[shapeIdx];
                 i = 0;
+                if (ndim > 1 && n < a.getSize()) {
+                    nn = 0;
+                    for (int j = ndim - 2; j >= 0; j--) {
+                        if (n % dims[j] == 0) {
+                            sbuff.append("]");
+                            nn += 1;
+                        }
+                    }
+                    for (int j = 0; j < nn; j++)
+                        sbuff.append("\n");
+                }
             } else {
                 sbuff.append(", ");
             }
@@ -1395,7 +1426,8 @@ public class ArrayUtil {
             }
         }
         if (ndim > 1) {
-            sbuff.append("]");
+            for (i = 0; i < ndim - 1; i++)
+                sbuff.append("]");
         }
         sbuff.append(")");
         return sbuff.toString();
@@ -1617,6 +1649,52 @@ public class ArrayUtil {
         }
 
         return r;
+    }
+
+    /**
+     * Convert char array encoding from UTF-8
+     * @param a Char array
+     * @param encoding The encoding convert to
+     * @return Converted array
+     */
+    public static Array convertEncoding(ArrayChar a, String encoding) {
+        if (encoding.toUpperCase().equals("UTF-8"))
+            return a.copy();
+
+        char[] data = (char[]) a.getStorage();
+        Charset cs = Charset.forName("UTF-8");
+        CharBuffer cb = CharBuffer.allocate(data.length);
+        cb.put(data);
+        cb.flip();
+        ByteBuffer bb = cs.encode(cb);
+        cs = Charset.forName(encoding);
+        cb = cs.decode(bb);
+        Array r = Array.factory(DataType.CHAR, a.getIndex(), cb.array());
+
+        return r;
+    }
+
+    /**
+     * Get string from a char array
+     * @param a Char array
+     * @param encoding The encoding convert to
+     * @return The string
+     */
+    public static String getString(ArrayChar a, String encoding) {
+        a = (ArrayChar) a.copyIfView();
+
+        char[] data = (char[]) a.getStorage();
+        if (!encoding.toUpperCase().equals("UTF-8")) {
+            try {
+                byte[] bytes = String.valueOf(data).getBytes("UTF-8");
+                return new String(bytes, encoding);
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+        }
+
+
+        return String.valueOf(data);
     }
 
     /**
@@ -4254,13 +4332,19 @@ public class ArrayUtil {
         if (idx < n - 1) {
             index.setDim(idx, indices[idx]);
             iterIndex(ii, index, indices, idx + 1);
-            index.setDim(idx, indices[idx] + 1);
+            if (indices[idx] < index.getShape(idx) - 1)
+                index.setDim(idx, indices[idx] + 1);
+            else
+                index.setDim(idx, indices[idx]);
             iterIndex(ii, index, indices, idx + 1);
         } else {
             index.setDim(idx, indices[idx]);
             ii.add((Index) index.clone());
             //System.out.println(index);
-            index.setDim(idx, indices[idx] + 1);
+            if (indices[idx] < index.getShape(idx) - 1)
+                index.setDim(idx, indices[idx] + 1);
+            else
+                index.setDim(idx, indices[idx]);
             ii.add((Index) index.clone());
             //System.out.println(index);
         }
@@ -4318,7 +4402,10 @@ public class ArrayUtil {
                 idx = 0;
             }
             indices[i] = idx;
-            distances[i] = (x - a.getDouble(idx)) / (a.getDouble(idx + 1) - a.getDouble(idx));
+            if (idx == a.getSize() - 1)
+                distances[i] = 0;
+            else
+                distances[i] = (x - a.getDouble(idx)) / (a.getDouble(idx + 1) - a.getDouble(idx));
         }
 
         return new Object[]{indices, distances, outBounds};
@@ -4389,6 +4476,7 @@ public class ArrayUtil {
                 return idx;
             }
 
+            idx = n - 1;
             for (int i = 1; i < n; i++) {
                 if (v < a.getDouble(i)) {
                     idx = i - 1;
@@ -4404,6 +4492,7 @@ public class ArrayUtil {
                 return idx;
             }
 
+            idx = n - 1;
             for (int i = 1; i < n; i++) {
                 if (v > a.getDouble(i)) {
                     idx = i - 1;

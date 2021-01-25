@@ -351,6 +351,7 @@ class DimVariable(object):
         if member is None:
             raise KeyError('The member %s not exists!' % member)
 
+        self.dataset.reopen()
         a = a.extractMemberArray(member)
         if a.getDataType() in [NCDataType.SEQUENCE, NCDataType.STRUCTURE]:
             return StructureArray(a)
@@ -587,6 +588,17 @@ class TDimVariable(object):
         return self.__str__()
         
     def __getitem__(self, indices):
+        if not isinstance(indices, tuple):
+            inds = []
+            inds.append(indices)
+            indices = inds
+
+        if len(indices) < self.ndim:
+            indices = list(indices)
+            for i in range(self.ndim - len(indices)):
+                indices.append(slice(None))
+            indices = tuple(indices)
+
         if len(indices) != self.ndim:
             print 'indices must be ' + str(self.ndim) + ' dimensions!'
             return None

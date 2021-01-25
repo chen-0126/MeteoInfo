@@ -11,6 +11,7 @@ import org.meteoinfo.legend.ColorBreak;
 import org.meteoinfo.legend.LegendScheme;
 import org.meteoinfo.legend.PolygonBreak;
 import org.meteoinfo.shape.PointZ;
+import org.meteoinfo.shape.ShapeTypes;
 
 /**
  *
@@ -19,6 +20,10 @@ import org.meteoinfo.shape.PointZ;
 public class SurfaceGraphics extends GraphicCollection3D {
     private PointZ[][] vertices;
     private int[][] legendIndex;
+    private boolean faceInterp;
+    private boolean edgeInterp;
+    private boolean mesh;
+    private boolean usingLight;
     
     /**
      * Constructor
@@ -27,6 +32,10 @@ public class SurfaceGraphics extends GraphicCollection3D {
         super();        
         this.allQuads = true;
         this.singleLegend = false;
+        this.faceInterp = false;
+        this.edgeInterp = false;
+        this.mesh = false;
+        this.usingLight = true;
     }
     
     /**
@@ -71,6 +80,70 @@ public class SurfaceGraphics extends GraphicCollection3D {
     public PointZ getVertex(int i, int j) {
         return this.vertices[i][j];
     }
+
+    /**
+     * get if user interpolated coloring for each face
+     * @return Boolean
+     */
+    public boolean isFaceInterp() {
+        return this.faceInterp;
+    }
+
+    /**
+     * Set if use interpolated coloring for each face
+     * @param value Boolean
+     */
+    public void setFaceInterp(boolean value) {
+        this.faceInterp = value;
+    }
+
+    /**
+     * get if user interpolated coloring for each edge
+     * @return Boolean
+     */
+    public boolean isEdgeInterp() {
+        return this.edgeInterp;
+    }
+
+    /**
+     * Set if use interpolated coloring for each edge
+     * @param value Boolean
+     */
+    public void setEdgeInterp(boolean value) {
+        this.edgeInterp = value;
+    }
+
+    /**
+     * Get if is mesh
+     * @return Boolean
+     */
+    public boolean isMesh() {
+        return this.mesh;
+    }
+
+    /**
+     * Set if is mesh
+     * @param value Boolean
+     */
+    public void setMesh(boolean value) {
+        this.mesh = value;
+    }
+
+    /**
+     * Get using light or not
+     * @return Boolean
+     */
+    public boolean isUsingLight() {
+        return this.usingLight;
+    }
+
+    /**
+     * Set using light or not
+     * @param value Boolean
+     */
+    public void setUsingLight(boolean value) {
+        this.usingLight = value;
+    }
     
     /**
      * Get dimension 1
@@ -98,6 +171,15 @@ public class SurfaceGraphics extends GraphicCollection3D {
         this.legendScheme = value;
         this.updateLegendIndex();
     }
+
+    /**
+     * Check if the legend has multiple colors
+     *
+     * @return Multiple colors or not
+     */
+    public boolean isMultiColors() {
+        return this.getLegendScheme().getBreakNum() > 1;
+    }
     
     /**
      * Update legend index
@@ -106,9 +188,11 @@ public class SurfaceGraphics extends GraphicCollection3D {
         int dim1 = this.getDim1();
         int dim2 = this.getDim2();
         this.legendIndex = new int[dim1][dim2];
-        for (int i = 0; i < dim1; i++) {
-            for (int j = 0; j < dim2; j++) {
-                this.legendIndex[i][j] = this.legendScheme.legendBreakIndex(this.vertices[i][j].M);
+        if (this.legendScheme.getBreakNum() > 1) {
+            for (int i = 0; i < dim1; i++) {
+                for (int j = 0; j < dim2; j++) {
+                    this.legendIndex[i][j] = this.legendScheme.legendBreakIndex(this.vertices[i][j].M);
+                }
             }
         }
     }
@@ -131,6 +215,27 @@ public class SurfaceGraphics extends GraphicCollection3D {
      */
     public float[] getRGBA(int i, int j) {
         return this.legendScheme.getLegendBreak(this.legendIndex[i][j]).getColor().getRGBComponents(null);
+    }
+
+    /**
+     * Get RGBA array of a vertex - edge
+     * @param i Vertex index i
+     * @param j Vertex index j
+     * @return RGBA float array
+     */
+    public float[] getEdgeRGBA(int i, int j) {
+        PolygonBreak pb = (PolygonBreak) this.legendScheme.getLegendBreak(this.legendIndex[i][j]);
+        return pb.getOutlineColor().getRGBComponents(null);
+    }
+
+    @Override
+    public LegendScheme getLegendScheme() {
+        if (this.mesh) {
+            LegendScheme ls = this.legendScheme.convertTo(ShapeTypes.Image, true);
+            return ls;
+        } else {
+            return this.legendScheme;
+        }
     }
  
 }

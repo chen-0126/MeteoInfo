@@ -5,6 +5,7 @@
  */
 package org.meteoinfo.math;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,6 +43,10 @@ public class ArrayMath {
             return DataType.DOUBLE;
         } else if (o instanceof Boolean) {
             return DataType.BOOLEAN;
+        } else if (o instanceof LocalDateTime) {
+            return DataType.DATE;
+        } else if (o instanceof Complex) {
+            return DataType.COMPLEX;
         } else {
             return DataType.OBJECT;
         }
@@ -3371,6 +3376,29 @@ public class ArrayMath {
     }
 
     /**
+     * Return the flat indices of the elements that are non-zero.
+     *
+     * @param a Input array
+     * @return Flat indices
+     */
+    public static Array flatNonZero(Array a) {
+        List<Integer> r = new ArrayList<>();
+        IndexIterator iterA = a.getIndexIterator();
+        int[] counter;
+        double v;
+        int i = 0;
+        while (iterA.hasNext()) {
+            v = iterA.getDoubleNext();
+            if (!Double.isNaN(v) && v != 0) {
+                r.add(i);
+            }
+            i += 1;
+        }
+
+        return ArrayUtil.array(r, DataType.INT);
+    }
+
+    /**
      * Bit and operation
      *
      * @param a Array a
@@ -5200,7 +5228,7 @@ public class ArrayMath {
             }
             shape[idx] = dataShape[i];
         }
-        Array r = Array.factory(DataType.DOUBLE, shape);
+        Array r = Array.factory(a.getDataType(), shape);
         double s;
         Index indexr = r.getIndex();
         int[] current;
@@ -5299,7 +5327,7 @@ public class ArrayMath {
             }
             shape[idx] = dataShape[i];
         }
-        Array r = Array.factory(DataType.DOUBLE, shape);
+        Array r = Array.factory(a.getDataType(), shape);
         double s;
         Index indexr = r.getIndex();
         int[] current;
@@ -5373,7 +5401,7 @@ public class ArrayMath {
             }
             shape[idx] = dataShape[i];
         }
-        Array r = Array.factory(DataType.DOUBLE, shape);
+        Array r = Array.factory(a.getDataType(), shape);
         double s;
         Index indexr = r.getIndex();
         int[] current;
@@ -5463,7 +5491,7 @@ public class ArrayMath {
      * @param a Array a
      * @return Summarize value
      */
-    public static double sum(Array a) {
+    public static Number sum(Array a) {
         double sum = 0.0D;
         double v;
         int n = 0;
@@ -5478,7 +5506,7 @@ public class ArrayMath {
         if (n == 0) {
             return Double.NaN;
         } else {
-            return sum;
+            return doubleToNumber(sum, a.getDataType());
         }
     }
 
@@ -5822,7 +5850,50 @@ public class ArrayMath {
                     ranges.add(new Range(current[idx], current[idx], 1));
                 }
             }
-            mean = mean(a, ranges);
+            mean = meanRange(a, ranges);
+            r.setDouble(i, mean);
+            indexr.incr();
+        }
+
+        return r;
+    }
+
+    /**
+     * Compute mean value of an array along an axis (dimension)
+     *
+     * @param a Array a
+     * @param axis Axis
+     * @return Mean value array
+     * @throws org.meteoinfo.ndarray.InvalidRangeException
+     */
+    public static Array mean(Array a, List<Integer> axis) throws InvalidRangeException {
+        int[] dataShape = a.getShape();
+        int[] shape = new int[dataShape.length - axis.size()];
+        int idx = 0;
+        for (int i = 0; i < dataShape.length; i++) {
+            if (axis.contains(i)) {
+                continue;
+            }
+            shape[idx] = dataShape[i];
+            idx += 1;
+        }
+        Array r = Array.factory(DataType.DOUBLE, shape);
+        double mean;
+        Index indexr = r.getIndex();
+        int[] current;
+        for (int i = 0; i < r.getSize(); i++) {
+            current = indexr.getCurrentCounter();
+            List<Range> ranges = new ArrayList<>();
+            idx = 0;
+            for (int j = 0; j < dataShape.length; j++) {
+                if (axis.contains(j)) {
+                    ranges.add(new Range(0, dataShape[j] - 1, 1));
+                } else {
+                    ranges.add(new Range(current[idx], current[idx], 1));
+                    idx += 1;
+                }
+            }
+            mean = meanRange(a, ranges);
             r.setDouble(i, mean);
             indexr.incr();
         }
@@ -5891,14 +5962,14 @@ public class ArrayMath {
     }
 
     /**
-     * Compute mean value of an array
+     * Compute mean value of an array by ranges
      *
      * @param a Array a
      * @param ranges Range list
      * @return Mean value
      * @throws org.meteoinfo.ndarray.InvalidRangeException
      */
-    public static double mean(Array a, List<Range> ranges) throws InvalidRangeException {
+    public static double meanRange(Array a, List<Range> ranges) throws InvalidRangeException {
         double mean = 0.0, v;
         int n = 0;
         IndexIterator ii = a.getRangeIterator(ranges);
@@ -6750,38 +6821,8 @@ public class ArrayMath {
     public static List<Object> asList(Array a) {
         IndexIterator iterA = a.getIndexIterator();
         List<Object> r = new ArrayList<>();
-        switch (a.getDataType()) {
-            case SHORT:
-            case INT:
-                while (iterA.hasNext()) {
-                    r.add(iterA.getIntNext());
-                }
-                break;
-            case FLOAT:
-                while (iterA.hasNext()) {
-                    r.add(iterA.getFloatNext());
-                }
-                break;
-            case DOUBLE:
-                while (iterA.hasNext()) {
-                    r.add(iterA.getDoubleNext());
-                }
-                break;
-            case BOOLEAN:
-                while (iterA.hasNext()) {
-                    r.add(iterA.getBooleanNext());
-                }
-                break;
-            case STRING:
-                while (iterA.hasNext()) {
-                    r.add(iterA.getStringNext());
-                }
-                break;
-            case OBJECT:
-                while (iterA.hasNext()) {
-                    r.add(iterA.getObjectNext());
-                }
-                break;
+        while (iterA.hasNext()) {
+            r.add(iterA.getObjectNext());
         }
         return r;
     }
@@ -7329,6 +7370,41 @@ public class ArrayMath {
     }
 
     /**
+     * Calculates the vertical component of the curl (ie, vorticity)
+     *
+     * @param uData U component
+     * @param vData V component
+     * @param xx X dimension value
+     * @param yy Y dimension value
+     * @return Curl
+     */
+    public static Array hcurl(Array uData, Array vData, Array xx, Array yy) {
+        xx = xx.copyIfView();
+        yy = yy.copyIfView();
+
+        int rank = uData.getRank();
+        int[] shape = uData.getShape();
+        Array lonData = Array.factory(DataType.DOUBLE, shape);
+        Array latData = Array.factory(DataType.DOUBLE, shape);
+        Index index = lonData.getIndex();
+        int[] current;
+        for (int i = 0; i < lonData.getSize(); i++) {
+            current = index.getCurrentCounter();
+            lonData.setDouble(index, xx.getDouble(current[rank - 1]));
+            latData.setDouble(index, yy.getDouble(current[rank - 2]));
+            index.incr();
+        }
+
+        Array dv = cdiff(vData, rank - 1);
+        Array dx = mul(cdiff(lonData, rank - 1), Math.PI / 180);
+        Array du = cdiff(mul(uData, cos(mul(latData, Math.PI / 180))), rank - 2);
+        Array dy = mul(cdiff(latData, rank - 2), Math.PI / 180);
+        Array gData = div(sub(div(dv, dx), div(du, dy)), mul(cos(mul(latData, Math.PI / 180)), 6.37e6));
+
+        return gData;
+    }
+
+    /**
      * Calculates the horizontal divergence using finite differencing
      *
      * @param uData U component
@@ -7348,6 +7424,41 @@ public class ArrayMath {
             current = index.getCurrentCounter();
             lonData.setDouble(index, xx.get(current[rank - 1]).doubleValue());
             latData.setDouble(index, yy.get(current[rank - 2]).doubleValue());
+            index.incr();
+        }
+
+        Array du = cdiff(uData, rank - 1);
+        Array dx = mul(cdiff(lonData, rank - 1), Math.PI / 180);
+        Array dv = cdiff(mul(vData, cos(mul(latData, Math.PI / 180))), rank - 2);
+        Array dy = mul(cdiff(latData, rank - 2), Math.PI / 180);
+        Array gData = div(add(div(du, dx), div(dv, dy)), mul(cos(mul(latData, Math.PI / 180)), 6.37e6));
+
+        return gData;
+    }
+
+    /**
+     * Calculates the horizontal divergence using finite differencing
+     *
+     * @param uData U component
+     * @param vData V component
+     * @param xx X dimension value
+     * @param yy Y dimension value
+     * @return Divergence
+     */
+    public static Array hdivg(Array uData, Array vData, Array xx, Array yy) {
+        xx = xx.copyIfView();
+        yy = yy.copyIfView();
+
+        int rank = uData.getRank();
+        int[] shape = uData.getShape();
+        Array lonData = Array.factory(DataType.DOUBLE, shape);
+        Array latData = Array.factory(DataType.DOUBLE, shape);
+        Index index = lonData.getIndex();
+        int[] current;
+        for (int i = 0; i < lonData.getSize(); i++) {
+            current = index.getCurrentCounter();
+            lonData.setDouble(index, xx.getDouble(current[rank - 1]));
+            latData.setDouble(index, yy.getDouble(current[rank - 2]));
             index.incr();
         }
 

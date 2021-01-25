@@ -113,7 +113,12 @@ def getcolor(style, alpha=None):
         elif style == 'pink' or style == 'p':
             c = Color.pink
         else:
-            c = Color.decode(style)
+            try:
+                c = Color.decode(style)
+            except:
+                c = None
+                print('Not a valid color: {}'.format(style))
+                return c
     elif isinstance(style, (tuple, list)):
         if len(style) == 3:
             c = Color(style[0], style[1], style[2])
@@ -208,14 +213,16 @@ def getcolormap(**kwargs):
         cmap.reverse()
     return cmap
     
-def makecolors(n, cmap='matlab_jet', reverse=False, alpha=None):
+def makecolors(n, cmap='matlab_jet', reverse=False, alpha=None, start=None, stop=None):
     '''
     Make colors.
     
     :param n: (*int*) Colors number.
     :param cmap: (*string*) Color map name. Default is ``matlab_jet``.
     :param reverse: (*boolean*) Reverse the colors or not. Default is ``False``.
-    :param alpha: (*float*) Alpha value (0 - 1) of the colors. Defaul is ``None``.
+    :param alpha: (*float*) Alpha value (0 - 1) of the colors. Default is ``None``.
+    :param start: (*int*) Start color index. Default is ``None``.
+    :param stop: (*int*) Stop color index. Default is ``None``.
 
     :returns: (*list*) Created colors.
     '''
@@ -226,11 +233,22 @@ def makecolors(n, cmap='matlab_jet', reverse=False, alpha=None):
         ocmap = getcolormap(cmap=cmap)
         if reverse:
             ocmap.reverse()
-        if alpha is None:
-            cols = ocmap.getColorList(n)    
+        if start is None and stop is None:
+            if alpha is None:
+                cols = ocmap.getColorList(n)
+            else:
+                alpha = (int)(alpha * 255)
+                cols = ocmap.getColorListAlpha(n, alpha)
         else:
-            alpha = (int)(alpha * 255)
-            cols = ocmap.getColorList(n, alpha)
+            if start is None:
+                start = 0
+            if stop is None:
+                stop = ocmap.getColorCount() - 1
+            if alpha is None:
+                cols = ocmap.getColorList(n, start, stop)
+            else:
+                alpha = (int)(alpha * 255)
+                cols = ocmap.getColorListAlpha(n, alpha, start, stop)
     return list(cols)
     
 def getpointstyle(style):
@@ -358,10 +376,10 @@ def getplotstyle(style, caption, **kwargs):
             markersize = kwargs.pop('markersize', None)
             if not markersize is None:
                 plb.setSymbolSize(markersize)
-            markercolor = kwargs.pop('markercolor', plb.getColor())
+            markercolor = kwargs.pop('markeredgecolor', plb.getColor())
             markercolor = getcolor(markercolor)
             plb.setSymbolColor(markercolor)
-            markerfillcolor = kwargs.pop('markerfillcolor', markercolor)
+            markerfillcolor = kwargs.pop('markerfacecolor', markercolor)
             markerfillcolor = getcolor(markerfillcolor)
             plb.setSymbolFillColor(markerfillcolor)
             return plb
@@ -375,13 +393,23 @@ def getplotstyle(style, caption, **kwargs):
             plb.setStyle(lineStyle)
         return plb
         
-def getlegendbreak(geometry, **kwargs): 
-    cobj = kwargs.pop('color', None)
-    if cobj is None:
-        cobj = kwargs.pop('facecolor', None)
+def getlegendbreak(geometry, **kwargs):
+    fill = True
     color = None
-    if not cobj is None:
-        color = getcolor(cobj)
+    if kwargs.has_key('color'):
+        color = kwargs.pop('color')
+        if color is None:
+            fill = False
+        else:
+            color = getcolor(color)
+    else:
+        if kwargs.has_key('facecolor'):
+            color = kwargs.pop('facecolor')
+            if color is None:
+                fill = False
+            else:
+                color = getcolor(color)
+
     if geometry == 'point':
         lb = PointBreak()        
         marker = kwargs.pop('marker', 'o')
@@ -403,14 +431,23 @@ def getlegendbreak(geometry, **kwargs):
             lb.setColor(color)
         size = kwargs.pop('size', 6)
         lb.setSize(size)
-        ecobj = kwargs.pop('edgecolor', 'k')
-        edgecolor = getcolor(ecobj)
-        lb.setOutlineColor(edgecolor)
-        edgesize = kwargs.pop('edgesize', 1)
-        lb.setOutlineSize(edgesize)
-        fill = kwargs.pop('fill', True)
+        edge = True
+        edgecolor = None
+        if kwargs.has_key('edgecolor'):
+            edgecolor = kwargs.pop('edgecolor')
+            if edgecolor is None:
+                edge = False
+            else:
+                edgecolor = getcolor(edgecolor)
+        if not edgecolor is None:
+            lb.setOutlineColor(edgecolor)
+        linewith = kwargs.pop('linewidth', None)
+        edgesize = kwargs.pop('edgesize', linewith)
+        if not edgesize is None:
+            lb.setOutlineSize(edgesize)
+        fill = kwargs.pop('fill', fill)
         lb.setDrawFill(fill)
-        edge = kwargs.pop('edge', True)
+        edge = kwargs.pop('edge', edge)
         lb.setDrawOutline(edge)
     elif geometry == 'line':
         lb = PolylineBreak()
@@ -444,18 +481,19 @@ def getlegendbreak(geometry, **kwargs):
             lb.setSymbolInterval(interval)
     elif geometry == 'polygon':
         lb = PolygonBreak()
-        ecobj = kwargs.pop('edgecolor', 'k')
-        edgecolor = getcolor(ecobj)
-        lb.setOutlineColor(edgecolor)
-        fill = kwargs.pop('fill', None)
-        if fill is None:
-            if color is None:
-                lb.setDrawFill(False)
+        edge = True
+        edgecolor = None
+        if kwargs.has_key('edgecolor'):
+            edgecolor = kwargs.pop('edgecolor')
+            if edgecolor is None:
+                edge = False
             else:
-                lb.setDrawFill(True)
-        else:
-            lb.setDrawFill(fill)
-        edge = kwargs.pop('edge', True)
+                edgecolor = getcolor(edgecolor)
+        if not edgecolor is None:
+            lb.setOutlineColor(edgecolor)
+        fill = kwargs.pop('fill', fill)
+        lb.setDrawFill(fill)
+        edge = kwargs.pop('edge', edge)
         lb.setDrawOutline(edge)
         size = kwargs.pop('size', None)
         size = kwargs.pop('linewidth', size)
@@ -510,13 +548,13 @@ def getlegendscheme(args, min, max, **kwargs):
                 ls = LegendManage.createLegendScheme(min, max, level_arg, cmap)
         else:    
             ls = LegendManage.createLegendScheme(min, max, cmap)
-        ecobj = kwargs.pop('edgecolor', None)
-        if not ecobj is None:
-            edgecolor = getcolor(ecobj)
-            ls = ls.convertTo(ShapeTypes.Polygon)
-            for lb in ls.getLegendBreaks():
-                lb.setDrawOutline(True)
-                lb.setOutlineColor(edgecolor)
+        # ecobj = kwargs.pop('edgecolor', None)
+        # if not ecobj is None:
+        #     edgecolor = getcolor(ecobj)
+        #     ls = ls.convertTo(ShapeTypes.Polygon)
+        #     for lb in ls.getLegendBreaks():
+        #         lb.setDrawOutline(True)
+        #         lb.setOutlineColor(edgecolor)
     return ls
     
 def setlegendscheme(ls, **kwargs):
@@ -735,17 +773,27 @@ def setlegendscheme_line(ls, **kwargs):
     
 def setlegendscheme_polygon(ls, **kwargs):
     ls = ls.convertTo(ShapeTypes.Polygon)
-    fcobj = kwargs.pop('facecolor', None)
-    if fcobj is None:
-        facecolor = None
+    fill = True
+    if kwargs.has_key('facecolor'):
+        facecolor = kwargs['facecolor']
+        if facecolor is None:
+            fill = False
+        else:
+            facecolor = getcolor(facecolor)
     else:
-        facecolor = getcolor(fcobj)
-    edgecolor = kwargs.pop('edgecolor', None)
-    if not edgecolor is None:
-        edgecolor = getcolor(edgecolor)
+        facecolor = None
+    edge = True
+    if kwargs.has_key('edgecolor'):
+        edgecolor = kwargs['edgecolor']
+        if edgecolor is None:
+            edge = False
+        else:
+            edgecolor = getcolor(edgecolor)
+    else:
+        edgecolor = None
+    edge = kwargs.pop('edge', edge)
     edgesize = kwargs.pop('edgesize', None)
-    fill = kwargs.pop('fill', None)
-    edge = kwargs.pop('edge', None)
+    fill = kwargs.pop('fill', fill)
     alpha = kwargs.pop('alpha', None)
     hatch = kwargs.pop('hatch', None)
     hatch = gethatch(hatch) 
@@ -753,6 +801,7 @@ def setlegendscheme_polygon(ls, **kwargs):
     bgcolor = kwargs.pop('bgcolor', None)
     bgcolor = getcolor(bgcolor)
     for lb in ls.getLegendBreaks():
+        lb.setDrawFill(fill)
         if not facecolor is None:
             lb.setColor(facecolor)
         if not alpha is None:
@@ -760,13 +809,10 @@ def setlegendscheme_polygon(ls, **kwargs):
             c = getcolor(c, alpha)
             lb.setColor(c)
         if not edgesize is None:
-            lb.setOutlineSize(edgesize)   
+            lb.setOutlineSize(edgesize)
+        lb.setDrawOutline(edge)
         if not edgecolor is None:
-            lb.setOutlineColor(edgecolor)   
-        if not fill is None:
-            lb.setDrawFill(fill)  
-        if not edge is None:
-            lb.setDrawOutline(edge)
+            lb.setOutlineColor(edgecolor)
         if not hatch is None:
             lb.setStyle(hatch)
             if not bgcolor is None:
@@ -795,7 +841,7 @@ def setpointlegendbreak(lb, **kwargs):
         else:
             pstyle = getpointstyle(marker)
             lb.setStyle(pstyle)
-    color = None
+    color = lb.getColor()
     if kwargs.has_key('color'):
         color = kwargs['color']
     elif kwargs.has_key('facecolor'):
@@ -804,7 +850,9 @@ def setpointlegendbreak(lb, **kwargs):
     if kwargs.has_key('alpha'):
         alpha = kwargs['alpha']
     if color is None:
-        if not alpha is None:
+        if alpha is None:
+            lb.setDrawFill(False)
+        else:
             color = getcolor(lb.getColor(), alpha)
             lb.setColor(color)
     else:
@@ -826,6 +874,8 @@ def setpointlegendbreak(lb, **kwargs):
         lb.setDrawOutline(kwargs['edge'])
     if kwargs.has_key('edgesize'):
         lb.setOutlineSize(kwargs['edgesize'])
+    elif kwargs.has_key('linewidth'):
+        lb.setOutlineSize(kwargs['linewidth'])
         
 def text(x, y, s, **kwargs):
     """

@@ -1095,12 +1095,46 @@ public class GraphicFactory {
     }
 
     /**
+     * Create a point graphic
+     * @param x X
+     * @param y Y
+     * @param pb Point legend break
+     * @return Point graphic
+     */
+    public static Graphic createPoint(float x, float y, PointBreak pb) {
+        PointShape ps = new PointShape();
+        ps.setPoint(new PointD(x, y));
+        return new Graphic(ps, pb);
+    }
+
+    /**
+     * Create graphics
+     *
+     * @param xdata X data array
+     * @param ydata Y data array
+     * @param pb Point legend break
+     * @return Point graphics
+     */
+    public static GraphicCollection createPoints(Array xdata, Array ydata, PointBreak pb) {
+        GraphicCollection graphics = new GraphicCollection();
+        PointShape ps;
+        IndexIterator xIter = xdata.getIndexIterator();
+        IndexIterator yIter = ydata.getIndexIterator();
+        while (xIter.hasNext()) {
+            ps = new PointShape();
+            ps.setPoint(new PointD(xIter.getDoubleNext(), yIter.getDoubleNext()));
+            graphics.add(new Graphic(ps, pb));
+        }
+        return graphics;
+    }
+
+    /**
      * Create graphics
      *
      * @param xdata X data array
      * @param ydata Y data array
      * @param cbs Color breaks
-     * @return LineString graphic
+     * @return Point graphics
      */
     public static GraphicCollection createPoints(Array xdata, Array ydata, List<ColorBreak> cbs) {
         GraphicCollection graphics = new GraphicCollection();
@@ -2194,28 +2228,30 @@ public class GraphicFactory {
             x = xIter.getDoubleNext();
             y = yIter.getDoubleNext();
             z = zIter.getDoubleNext();
-            // Add bar
-            if (widths.getSize() > 1 && widths.getSize() > i) {
-                width = widths.getDouble(i);
-                hw = width * 0.5;
-            }
-            List<PointZ> pList = new ArrayList<>();
-            pList.add(new PointZ(x + hw, y + hw, minz));
-            pList.add(new PointZ(x + hw, y - hw, minz));
-            pList.add(new PointZ(x + hw, y + hw, z));
-            pList.add(new PointZ(x + hw, y - hw, z));
-            pList.add(new PointZ(x - hw, y + hw, minz));
-            pList.add(new PointZ(x - hw, y - hw, minz));
-            pList.add(new PointZ(x - hw, y + hw, z));
-            pList.add(new PointZ(x - hw, y - hw, z));
-            CubicShape cs = new CubicShape();
-            cs.setPoints(pList);
-            if (bbs.size() > i) {
-                bb = bbs.get(i);
-            }
-            graphics.add(new Graphic(cs, bb));
+            if (!Double.isNaN(z)) {
+                // Add bar
+                if (widths.getSize() > 1 && widths.getSize() > i) {
+                    width = widths.getDouble(i);
+                    hw = width * 0.5;
+                }
+                List<PointZ> pList = new ArrayList<>();
+                pList.add(new PointZ(x + hw, y + hw, minz));
+                pList.add(new PointZ(x + hw, y - hw, minz));
+                pList.add(new PointZ(x + hw, y + hw, z));
+                pList.add(new PointZ(x + hw, y - hw, z));
+                pList.add(new PointZ(x - hw, y + hw, minz));
+                pList.add(new PointZ(x - hw, y - hw, minz));
+                pList.add(new PointZ(x - hw, y + hw, z));
+                pList.add(new PointZ(x - hw, y - hw, z));
+                CubicShape cs = new CubicShape();
+                cs.setPoints(pList);
+                if (bbs.size() > i) {
+                    bb = bbs.get(i);
+                }
+                graphics.add(new Graphic(cs, bb));
 
-            i++;
+                i++;
+            }
         }
 
         graphics.setSingleLegend(false);
@@ -2832,7 +2868,7 @@ public class GraphicFactory {
         ishape.setPoint(new PointD(xmin, ymin));
         ishape.setImage(aImage);
         ishape.setExtent(new Extent(xmin, xmax, ymin, ymax));
-        return new Graphic(ishape, new ColorBreak());
+        return new ImageGraphic(ishape, ls);
     }
 
     /**
@@ -2907,7 +2943,7 @@ public class GraphicFactory {
         ishape.setPoint(new PointD(xmin, ymin));
         ishape.setImage(aImage);
         ishape.setExtent(new Extent(xmin, xmax, ymin, ymax));
-        return new Graphic(ishape, new ColorBreak());
+        return new ImageGraphic(ishape, ls);
     }
 
     /**
@@ -4589,13 +4625,15 @@ public class GraphicFactory {
      * @param udata U data array
      * @param vdata V data array
      * @param wdata W data array
-     * @param length The length of each wind arrow
+     * @param scale The length scale of each wind arrow
+     * @param headWidth The head width of the arrow
+     * @param headLength The head length of the arrow
      * @param cdata Colored data array
      * @param ls Legend scheme
      * @return GraphicCollection
      */
     public static GraphicCollection createArrows3D(Array xdata, Array ydata, Array zdata, Array udata,
-            Array vdata, Array wdata, float length, Array cdata, LegendScheme ls) {
+            Array vdata, Array wdata, float scale, float headWidth, float headLength, Array cdata, LegendScheme ls) {
         GraphicCollection gc = new GraphicCollection();
         ShapeTypes sts = ls.getShapeType();
         ls = ls.convertTo(ShapeTypes.Point);
@@ -4631,7 +4669,9 @@ public class GraphicFactory {
                 wa.u = u;
                 wa.v = v;
                 wa.w = w;
-                wa.length = length;
+                wa.scale = scale;
+                wa.setHeadWith(headWidth);
+                wa.setHeadLength(headLength);
                 wa.setPoint(aPoint);
                 if (cdata == null) {
                     cb = ls.getLegendBreaks().get(0);
@@ -4750,7 +4790,7 @@ public class GraphicFactory {
         GraphicCollection gc = new GraphicCollection();
         GraphicCollection lgc = new GraphicCollection();
         GraphicCollection pgc = new GraphicCollection();
-        double sum = ArrayMath.sum(xdata);
+        double sum = ArrayMath.sum(xdata).doubleValue();
         double v;
         float sweepAngle, angle;
         float ex;

@@ -18,9 +18,13 @@ from mipylib.numeric.core import NDArray, DimArray
 import mipylib.numeric as np
 import plotutil
 import mipylib.miutil as miutil
+from mipylib import migl
+from mipylib.geolib import migeo
 
+import os
 import datetime
 import numbers
+import warnings
 
 from java.awt import Font, Color, BasicStroke
 
@@ -77,7 +81,10 @@ class Axes3D(Axes):
         zaxis = kwargs.pop('zaxis', True)
         self.axes.setDisplayZ(zaxis)
         grid = kwargs.pop('grid', True)
-        self.axes.setDisplayGrids(grid)
+        grid_line = self.axes.getGridLine()
+        grid_line.setDrawXLine(grid)
+        grid_line.setDrawYLine(grid)
+        grid_line.setDrawZLine(grid)
         boxed = kwargs.pop('boxed', True)
         self.axes.setBoxed(boxed)
         bbox = kwargs.pop('bbox', False)
@@ -97,6 +104,13 @@ class Axes3D(Axes):
     @property
     def axestype(self):
         return '3d'
+
+    @property
+    def ndim(self):
+        """
+        Dimension number property
+        """
+        return 3
     
     def get_distance(self):
         '''
@@ -186,14 +200,6 @@ class Axes3D(Axes):
         '''
         self.axes.setDrawBoundingBox(bbox)
         
-    def set_draw_grid(self, grid):
-        '''
-        Set draw grid lines or not.
-        
-        :param grid: (*boolean*) Draw grid line or not.
-        '''
-        self.axes.setDisplayGrids(grid)
-        
     def get_xlim(self):
         """
         Get the *x* limits of the current axes.
@@ -255,7 +261,28 @@ class Axes3D(Axes):
             zmin = miutil.date2num(zmin)
         if isinstance(zmax, datetime.datetime):
             zmax = miutil.date2num(zmax)    
-        self.axes.setZMinMax(zmin, zmax) 
+        self.axes.setZMinMax(zmin, zmax)
+
+    def set_zlabel(self, label, **kwargs):
+        """
+        Set the z axis label of the current axes.
+
+        :param label: (*string*) Label string.
+        :param fontname: (*string*) Font name. Default is ``Arial`` .
+        :param fontsize: (*int*) Font size. Default is ``14`` .
+        :param bold: (*boolean*) Is bold font or not. Default is ``True`` .
+        :param color: (*color*) Label string color. Default is ``black`` .
+        """
+        if not kwargs.has_key('xalign'):
+            kwargs['xalign'] = 'center'
+        if not kwargs.has_key('yalign'):
+            kwargs['yalign'] = 'bottom'
+        if not kwargs.has_key('rotation'):
+            kwargs['rotation'] = 90
+        ctext = plotutil.text(0, 0, label, **kwargs)
+        axis = self.axes.getZAxis()
+        axis.setLabel(ctext)
+        axis.setDrawLabel(True)
     
     def get_zticks(self):
         '''
@@ -452,7 +479,41 @@ class Axes3D(Axes):
             axis.setMinorTickNum(minorticknum)
             axis.setInsideTick(tickin)
             axis.setTickLabelFont(font)
-    
+
+    def grid(self, b, **kwargs):
+        """
+        Turn the aexs grids on or off.
+
+        :param b: If b is *None* and *len(kwargs)==0* , toggle the grid state. If *kwargs*
+            are supplied, it is assumed that you want a grid and *b* is thus set to *True* .
+        :param kwargs: *kwargs* are used to set the grid line properties.
+        """
+        gridline = self.axes.getGridLine()
+        if b is None:
+            b = not gridline.isDrawZLine()
+        axis = kwargs.pop('axis', 'all')
+        if axis == 'all':
+            gridline.setDrawXLine(b)
+            gridline.setDrawYLine(b)
+            gridline.setDrawZLine(b)
+        elif axis == 'x':
+            gridline.setDrawXLine(b)
+        elif axis == 'y':
+            gridline.setDrawYLine(b)
+        elif axis == 'z':
+            gridline.setDrawZLine(b)
+        color = kwargs.pop('color', None)
+        if not color is None:
+            c = plotutil.getcolor(color)
+            gridline.setColor(c)
+        linewidth = kwargs.pop('linewidth', None)
+        if not linewidth is None:
+            gridline.setSize(linewidth)
+        linestyle = kwargs.pop('linestyle', None)
+        if not linestyle is None:
+            linestyle = plotutil.getlinestyle(linestyle)
+            gridline.setStyle(linestyle)
+
     def plot(self, x, y, z, *args, **kwargs):
         """
         Plot 3D lines and/or markers to the axes. *args* is a variable length argument, allowing
@@ -773,6 +834,60 @@ class Axes3D(Axes):
             self.add_graphic(graphics[0])
             self.add_graphic(graphics[1])
         return graphics[0], graphics[1]
+
+    def mesh(self, *args, **kwargs):
+        '''
+        creates a three-dimensional wireframe plot
+
+        :param x: (*array_like*) Optional. X coordinate array.
+        :param y: (*array_like*) Optional. Y coordinate array.
+        :param z: (*array_like*) 2-D z value array.
+        :param cmap: (*string*) Color map string.
+        :param xyaxis: (*boolean*) Draw x and y axis or not.
+        :param zaxis: (*boolean*) Draw z axis or not.
+        :param grid: (*boolean*) Draw grid or not.
+        :param boxed: (*boolean*) Draw boxed or not.
+        :param mesh: (*boolean*) Draw mesh line or not.
+
+        :returns: Legend
+        '''
+        if len(args) == 1:
+            x = args[0].dimvalue(1)
+            y = args[0].dimvalue(0)
+            x, y = np.meshgrid(x, y)
+            z = args[0]
+            args = args[1:]
+        else:
+            x = args[0]
+            y = args[1]
+            z = args[2]
+            args = args[3:]
+
+        zcolors = kwargs.pop('zcolors', False)
+        if not zcolors:
+            line = plotutil.getlegendbreak('line', **kwargs)[0]
+            graphics = GraphicFactory.createWireframe(x.asarray(), y.asarray(), z.asarray(), line)
+        else:
+            cmap = plotutil.getcolormap(**kwargs)
+            if len(args) > 0:
+                level_arg = args[0]
+                if isinstance(level_arg, int):
+                    cn = level_arg
+                    ls = LegendManage.createLegendScheme(z.min(), z.max(), cn, cmap)
+                else:
+                    if isinstance(level_arg, NDArray):
+                        level_arg = level_arg.aslist()
+                    ls = LegendManage.createLegendScheme(z.min(), z.max(), level_arg, cmap)
+            else:
+                ls = LegendManage.createLegendScheme(z.min(), z.max(), cmap)
+            ls = ls.convertTo(ShapeTypes.Polyline)
+            plotutil.setlegendscheme(ls, **kwargs)
+            graphics = GraphicFactory.createWireframe(x.asarray(), y.asarray(), z.asarray(), ls)
+
+        visible = kwargs.pop('visible', True)
+        if visible:
+            self.add_graphic(graphics)
+        return graphics
         
     def plot_wireframe(self, *args, **kwargs):
         '''
@@ -789,7 +904,8 @@ class Axes3D(Axes):
         :param mesh: (*boolean*) Draw mesh line or not.
         
         :returns: Legend
-        '''        
+        '''
+        warnings.warn("plot_wireframe is deprecated", DeprecationWarning)
         if len(args) == 1:
             x = args[0].dimvalue(1)
             y = args[0].dimvalue(0)
@@ -827,6 +943,55 @@ class Axes3D(Axes):
         if visible:
             self.add_graphic(graphics)
         return graphics
+
+    def surf(self, *args, **kwargs):
+        '''
+        creates a three-dimensional surface plot
+
+        :param x: (*array_like*) Optional. X coordinate array.
+        :param y: (*array_like*) Optional. Y coordinate array.
+        :param z: (*array_like*) 2-D z value array.
+        :param cmap: (*string*) Color map string.
+        :param xyaxis: (*boolean*) Draw x and y axis or not.
+        :param zaxis: (*boolean*) Draw z axis or not.
+        :param grid: (*boolean*) Draw grid or not.
+        :param boxed: (*boolean*) Draw boxed or not.
+        :param mesh: (*boolean*) Draw mesh line or not.
+
+        :returns: Legend
+        '''
+        if len(args) <= 2:
+            x = args[0].dimvalue(1)
+            y = args[0].dimvalue(0)
+            x, y = np.meshgrid(x, y)
+            z = args[0]
+            args = args[1:]
+        else:
+            x = args[0]
+            y = args[1]
+            z = args[2]
+            args = args[3:]
+        cmap = plotutil.getcolormap(**kwargs)
+        if len(args) > 0:
+            level_arg = args[0]
+            if isinstance(level_arg, int):
+                cn = level_arg
+                ls = LegendManage.createLegendScheme(z.min(), z.max(), cn, cmap)
+            else:
+                if isinstance(level_arg, NDArray):
+                    level_arg = level_arg.aslist()
+                ls = LegendManage.createLegendScheme(z.min(), z.max(), level_arg, cmap)
+        else:
+            ls = LegendManage.createLegendScheme(z.min(), z.max(), cmap)
+        ls = ls.convertTo(ShapeTypes.Polygon)
+        edge = kwargs.pop('edge', True)
+        kwargs['edge'] = edge
+        plotutil.setlegendscheme(ls, **kwargs)
+        graphics = GraphicFactory.createMeshPolygons(x.asarray(), y.asarray(), z.asarray(), ls)
+        visible = kwargs.pop('visible', True)
+        if visible:
+            self.add_graphic(graphics)
+        return graphics
         
     def plot_surface(self, *args, **kwargs):
         '''
@@ -843,7 +1008,8 @@ class Axes3D(Axes):
         :param mesh: (*boolean*) Draw mesh line or not.
         
         :returns: Legend
-        '''        
+        '''
+        warnings.warn("plot_surface is deprecated", DeprecationWarning)
         if len(args) <= 2:
             x = args[0].dimvalue(1)
             y = args[0].dimvalue(0)
@@ -994,11 +1160,8 @@ class Axes3D(Axes):
         else:    
             ls = LegendManage.createLegendScheme(gdata.min(), gdata.max(), cmap)
         ls = ls.convertTo(ShapeTypes.Polygon)
-        edge = kwargs.pop('edge', None)
-        if edge is None:
-            kwargs['edge'] = False
-        else:
-            kwargs['edge'] = edge
+        if not kwargs.has_key('edgecolor'):
+            kwargs['edgecolor'] = None
         plotutil.setlegendscheme(ls, **kwargs)
         
         smooth = kwargs.pop('smooth', True)
@@ -1121,7 +1284,7 @@ class Axes3D(Axes):
         
     def quiver(self, *args, **kwargs):
         """
-        Plot a 2-D field of arrows.
+        Plot a 3-D field of arrows.
         
         :param x: (*array_like*) X coordinate array.
         :param y: (*array_like*) Y coordinate array.
@@ -1187,27 +1350,43 @@ class Axes3D(Axes):
         
         if not cdata is None:
             cdata = plotutil.getplotdata(cdata)
-        length = kwargs.pop('length', 1)
-        igraphic = GraphicFactory.createArrows3D(x, y, z, u, v, w, length, cdata, ls)
+        scale = kwargs.pop('scale', 1)
+        headwidth = kwargs.pop('headwidth', 1)
+        headlength = kwargs.pop('headlength', 2.5)
+        igraphic = GraphicFactory.createArrows3D(x, y, z, u, v, w, scale, headwidth,
+                                                 headlength, cdata, ls)
 
         visible = kwargs.pop('visible', True)
         if visible:
             self.add_graphic(igraphic)
         return igraphic
-        
-    def plot_layer(self, layer, **kwargs):
+
+    def geoshow(self, layer, **kwargs):
         '''
         Plot a layer in 3D axes.
-        
+
         :param layer: (*MILayer*) The layer to be plotted.
-        
+
         :returns: Graphics.
         '''
         ls = kwargs.pop('symbolspec', None)
         offset = kwargs.pop('offset', 0)
         xshift = kwargs.pop('xshift', 0)
+
+        if isinstance(layer, basestring):
+            fn = layer
+            if not fn.endswith('.shp'):
+                fn = fn + '.shp'
+            if not os.path.exists(fn):
+                fn = os.path.join(migl.get_map_folder(), fn)
+            if os.path.exists(fn):
+                encoding = kwargs.pop('encoding', None)
+                layer = migeo.shaperead(fn, encoding)
+            else:
+                raise IOError('File not exists: ' + fn)
+
         layer = layer.layer
-        if layer.getLayerType() == LayerTypes.VectorLayer:            
+        if layer.getLayerType() == LayerTypes.VectorLayer:
             if ls is None:
                 ls = layer.getLegendScheme()
                 if len(kwargs) > 0 and layer.getLegendScheme().getBreakNum() == 1:
@@ -1218,20 +1397,35 @@ class Axes3D(Axes):
                         geometry = 'line'
                     elif btype == BreakTypes.PolygonBreak:
                         geometry = 'polygon'
+                        if not kwargs.has_key('facecolor'):
+                            kwargs['facecolor'] = None
+                        if not kwargs.has_key('edgecolor'):
+                            kwargs['edgecolor'] = 'k'
                     lb, isunique = plotutil.getlegendbreak(geometry, **kwargs)
                     ls.getLegendBreaks().set(0, lb)
 
             plotutil.setlegendscheme(ls, **kwargs)
-            layer.setLegendScheme(ls)                    
+            layer.setLegendScheme(ls)
             graphics = GraphicFactory.createGraphicsFromLayer(layer, offset, xshift)
         else:
             interpolation = kwargs.pop('interpolation', None)
             graphics = GraphicFactory.createImage(layer, offset, xshift, interpolation)
-        
+
         visible = kwargs.pop('visible', True)
         if visible:
             self.add_graphic(graphics)
         return graphics
+        
+    def plot_layer(self, layer, **kwargs):
+        '''
+        Plot a layer in 3D axes.
+        
+        :param layer: (*MILayer*) The layer to be plotted.
+        
+        :returns: Graphics.
+        '''
+        warnings.warn("plot_layer is deprecated", DeprecationWarning)
+        return self.geoshow(layer, **kwargs)
         
     def fill_between(self, x, y1, y2=0, where=None, **kwargs):
         """

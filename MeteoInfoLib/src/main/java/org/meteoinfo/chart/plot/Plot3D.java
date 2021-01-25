@@ -38,24 +38,9 @@ import org.meteoinfo.global.Extent;
 import org.meteoinfo.global.Extent3D;
 import org.meteoinfo.global.MIMath;
 import org.meteoinfo.global.PointF;
-import org.meteoinfo.legend.BreakTypes;
-import org.meteoinfo.legend.ColorBreak;
-import org.meteoinfo.legend.ColorBreakCollection;
-import org.meteoinfo.legend.PointBreak;
-import org.meteoinfo.legend.PolygonBreak;
-import org.meteoinfo.legend.PolylineBreak;
+import org.meteoinfo.legend.*;
 import org.meteoinfo.math.sort.QuickSort;
-import org.meteoinfo.shape.Graphic;
-import org.meteoinfo.shape.ImageShape;
-import org.meteoinfo.shape.PointZ;
-import org.meteoinfo.shape.PointZShape;
-import org.meteoinfo.shape.PolygonZ;
-import org.meteoinfo.shape.PolygonZShape;
-import org.meteoinfo.shape.Polyline;
-import org.meteoinfo.shape.PolylineZShape;
-import org.meteoinfo.shape.Shape;
-import org.meteoinfo.shape.ShapeTypes;
-import org.meteoinfo.shape.WindArrow3D;
+import org.meteoinfo.shape.*;
 
 /**
  *
@@ -71,19 +56,20 @@ public class Plot3D extends Plot {
     private Axis xAxis;
     private Axis yAxis;
     private Axis zAxis;
+    private GridLine gridLine;
 
     private final Projector projector; // the projector, controls the point of view
     private int prevwidth, prevheight; // canvas size
     private Rectangle graphBounds;    //Graphic area bounds
 
     private boolean isBoxed, isMesh, isScaleBox, isDisplayXY, isDisplayZ,
-            isDisplayGrids, drawBoundingBox, drawBase;
+            drawBoundingBox, drawBase;
     private boolean hideOnDrag;
     private float xmin, xmax, ymin;
     private float ymax, zmin, zmax;
 
     private Color boxColor = Color.getHSBColor(0f, 0f, 0.95f);
-    private Color lineboxColor = Color.getHSBColor(0f, 0f, 0.8f);
+    //private Color lineboxColor = Color.getHSBColor(0f, 0f, 0.8f);
 
     // Projection parameters
     private int factor_x, factor_y; // conversion factors
@@ -119,7 +105,8 @@ public class Plot3D extends Plot {
         this.graphics = new GraphicCollection3D();
         this.hideOnDrag = false;
         this.isBoxed = true;
-        this.isDisplayGrids = true;
+        this.gridLine = new GridLine();
+        //this.displayGrids = true;
         this.isDisplayXY = true;
         this.isDisplayZ = true;
         this.drawBoundingBox = false;
@@ -441,6 +428,15 @@ public class Plot3D extends Plot {
     }
 
     /**
+     * Get grid line
+     *
+     * @return Grid line
+     */
+    public GridLine getGridLine() {
+        return this.gridLine;
+    }
+
+    /**
      * Set display X/Y axis or not
      *
      * @param value Boolean
@@ -458,14 +454,22 @@ public class Plot3D extends Plot {
         this.isDisplayZ = value;
     }
 
-    /**
-     * Set display grids or not
-     *
-     * @param value Boolean
-     */
-    public void setDisplayGrids(boolean value) {
-        this.isDisplayGrids = value;
-    }
+//    /**
+//     * Get display grids or not
+//     * @return Boolean
+//     */
+//    public boolean isDisplayGrids() {
+//        return this.displayGrids;
+//    }
+//
+//    /**
+//     * Set display grids or not
+//     *
+//     * @param value Boolean
+//     */
+//    public void setDisplayGrids(boolean value) {
+//        this.displayGrids = value;
+//    }
 
     /**
      * Set display box or not
@@ -1529,7 +1533,7 @@ public class Plot3D extends Plot {
      * @param x used to retrieve x coordinates of drawn plane from this method.
      * @param y used to retrieve y coordinates of drawn plane from this method.
      */
-    private void drawBase(Graphics g, int[] x, int[] y) {
+    private void drawBase(Graphics2D g, int[] x, int[] y) {
         Point p = projector.project(-10, -10, -10);
         x[0] = p.x;
         y[0] = p.y;
@@ -1548,7 +1552,8 @@ public class Plot3D extends Plot {
         g.setColor(this.boxColor);
         g.fillPolygon(x, y, 4);
 
-        g.setColor(this.lineboxColor);
+        g.setColor(this.gridLine.getColor());
+        g.setStroke(new BasicStroke(this.gridLine.getSize()));
         g.drawPolygon(x, y, 5);
     }
 
@@ -1562,7 +1567,7 @@ public class Plot3D extends Plot {
      * @param x_align the alignment in x direction
      * @param y_align the alignment in y direction
      */
-    private void outString(Graphics g, int x, int y, String s, XAlign x_align, YAlign y_align) {
+    private void outString(Graphics2D g, int x, int y, String s, XAlign x_align, YAlign y_align) {
         switch (y_align) {
             case TOP:
                 y += g.getFontMetrics(g.getFont()).getAscent();
@@ -1759,7 +1764,7 @@ public class Plot3D extends Plot {
      * @param x_align the alignment in x direction
      * @param y_align the alignment in y direction
      */
-    private void outFloat(Graphics g, int x, int y, float f, XAlign x_align, YAlign y_align) {
+    private void outFloat(Graphics2D g, int x, int y, float f, XAlign x_align, YAlign y_align) {
         // String s = Float.toString(f);
         String s = format(f);
         outString(g, x, y, s, x_align, y_align);
@@ -1897,7 +1902,8 @@ public class Plot3D extends Plot {
             g.setColor(this.boxColor);
             g.fillPolygon(x, y, 4);
 
-            g.setColor(this.lineboxColor);
+            g.setColor(this.gridLine.getColor());
+            g.setStroke(new BasicStroke(this.gridLine.getSize()));
             g.drawPolygon(x, y, 5);
 
             projection = projector.project(-factor_x * 10, factor_y * 10, 10);
@@ -1912,7 +1918,8 @@ public class Plot3D extends Plot {
             g.setColor(this.boxColor);
             g.fillPolygon(x, y, 4);
 
-            g.setColor(this.lineboxColor);
+            g.setColor(this.gridLine.getColor());
+            g.setStroke(new BasicStroke(this.gridLine.getSize()));
             g.drawPolygon(x, y, 5);
         } /*else if (isDisplayZ) {
             projection = projector.project(factor_x * 10, -factor_y * 10, -10);
@@ -1992,10 +1999,11 @@ public class Plot3D extends Plot {
                 //vi = (v - xmin) * xfactor - 10;
                 //tickpos = projector.project(vi, factor_y * 10, -10);
                 tickpos = this.project(v, factor_y > 0 ? this.ymax : this.ymin, this.zmin);
-                if (this.isDisplayGrids && (v != xmin && v != xmax)) {
+                if (this.gridLine.isDrawXLine() && (v != xmin && v != xmax)) {
                     //projection = projector.project(vi, -factor_y * 10, -10);
                     projection = this.project(v, factor_y < 0 ? this.ymax : this.ymin, this.zmin);
-                    g.setColor(this.lineboxColor);
+                    g.setColor(this.gridLine.getColor());
+                    g.setStroke(new BasicStroke(this.gridLine.getSize()));
                     g.drawLine(projection.x, projection.y, tickpos.x, tickpos.y);
                     if (this.isDisplayZ && this.isBoxed) {
                         x[0] = projection.x;
@@ -2073,10 +2081,11 @@ public class Plot3D extends Plot {
                 //vi = (v - ymin) * yfactor - 10;
                 //tickpos = projector.project(factor_x * 10, vi, -10);
                 tickpos = this.project(factor_x > 0 ? this.xmax : this.xmin, v, this.zmin);
-                if (this.isDisplayGrids && (v != ymin && v != ymax)) {
+                if (this.gridLine.isDrawYLine() && (v != ymin && v != ymax)) {
                     //projection = projector.project(-factor_x * 10, vi, -10);
                     projection = this.project(factor_x < 0 ? this.xmax : this.xmin, v, this.zmin);
-                    g.setColor(this.lineboxColor);
+                    g.setColor(this.gridLine.getColor());
+                    g.setStroke(new BasicStroke(this.gridLine.getSize()));
                     g.drawLine(projection.x, projection.y, tickpos.x, tickpos.y);
                     if (this.isDisplayZ && this.isBoxed) {
                         x[0] = projection.x;
@@ -2155,11 +2164,12 @@ public class Plot3D extends Plot {
                 //tickpos = projector.project(factor_x * 10 * lf, -factor_y * 10 * lf, vi);
                 tickpos = this.project(factor_x * lf > 0 ? this.xmax : this.xmin,
                         factor_y * lf < 0 ? this.ymax : this.ymin, v);
-                if (this.isDisplayGrids && this.isBoxed && (v != zmin && v != zmax)) {
+                if (this.gridLine.isDrawZLine() && this.isBoxed && (v != zmin && v != zmax)) {
                     //projection = projector.project(-factor_x * 10, -factor_y * 10, vi);
                     projection = this.project(factor_x < 0 ? this.xmax : this.xmin,
                             factor_y < 0 ? this.ymax : this.ymin, v);
-                    g.setColor(this.lineboxColor);
+                    g.setColor(this.gridLine.getColor());
+                    g.setStroke(new BasicStroke(this.gridLine.getSize()));
                     g.drawLine(projection.x, projection.y, tickpos.x, tickpos.y);
                     x[0] = projection.x;
                     y[0] = projection.y;
@@ -2201,7 +2211,8 @@ public class Plot3D extends Plot {
         Point startingpoint;
 
         startingpoint = projector.project(factor_x * 10, factor_y * 10, 10);
-        g2.setColor(this.lineboxColor);
+        g2.setColor(this.gridLine.getColor());
+        g2.setStroke(new BasicStroke(this.gridLine.getSize()));
         projection = projector.project(-factor_x * 10, factor_y * 10, 10);
         g2.drawLine(startingpoint.x, startingpoint.y, projection.x, projection.y);
         projection = projector.project(factor_x * 10, -factor_y * 10, 10);
@@ -2334,6 +2345,32 @@ public class Plot3D extends Plot {
                 break;
         }
         legend.draw(g, new PointF(x, y));
+    }
+
+    /**
+     * Get legend scheme
+     *
+     * @return Legend scheme
+     */
+    public LegendScheme getLegendScheme() {
+        LegendScheme ls = null;
+        int n = this.graphics.getNumGraphics();
+        for (int i = n - 1; i >= 0; i--) {
+            Graphic g = this.graphics.getGraphicN(i);
+            if (g instanceof GraphicCollection) {
+                ls = ((GraphicCollection)g).getLegendScheme();
+                break;
+            }
+        }
+
+        if (ls == null) {
+            ShapeTypes stype = ShapeTypes.Polyline;
+            ls = new LegendScheme(stype);
+            for (Graphic g : this.graphics.getGraphics()) {
+                ls.getLegendBreaks().add(g.getLegend());
+            }
+        }
+        return ls;
     }
 
     // </editor-fold>

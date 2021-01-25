@@ -9,6 +9,8 @@ import math
 import cmath
 import datetime
 import numbers
+import operator
+import itertools
 from org.meteoinfo.data import GridData, GridArray, StationData, DataMath, TableData, TableUtil
 from org.meteoinfo.math import ArrayMath, ArrayUtil
 from org.meteoinfo.data.meteodata.netcdf import NetCDFDataInfo
@@ -39,12 +41,13 @@ __all__ = [
     'argmin','argmax','array','array_split','asanyarray','asarray','asgridarray','asgriddata','asin',
     'asmiarray','asstationdata','atleast_1d','atleast_2d','atan','atan2','ave_month','average','histogram',
     'broadcast_to','cdiff','ceil','concatenate','corrcoef','cos','cumsum','degrees','delete','delnan','diag',
-    'diff','dim_array','datatable','dot','empty','exp','eye','floor','fmax','fmin','full',
+    'diff','dim_array','datatable','dot','empty','empty_like','exp','eye','flatnonzero',
+    'floor','fmax','fmin','full',
     'griddata','hcurl','hdivg','hstack','identity','interp2d',
-    'interpn','isarray','isfinite','isinf','isnan','linint2','linregress','linspace','log','log10',
+    'interpn','isarray','isfinite','isinf','isnan','linspace','log','log10',
     'logical_not','logspace','magnitude','max','maximum','mean','median','meshgrid','min','minimum',
-    'monthname','newaxis','nonzero','ones','ones_like','pol2cart','polyval','power','radians','ravel',
-    'reshape','repeat','rolling_mean','rot90','sin','shape','smooth5','smooth9','sort','squeeze','argsort',
+    'monthname','moveaxis','newaxis','nonzero','ones','ones_like','pol2cart','power','radians','ravel',
+    'reshape','repeat','roll','rolling_mean','rot90','sin','shape','smooth5','smooth9','sort','squeeze','argsort',
     'split','sqrt','square','std','sum','swapaxes','tan','tile','transpose','trapz','vdot','unique',
     'unravel_index','var','vstack','where','zeros','zeros_like'
     ]
@@ -349,6 +352,23 @@ def zeros_like(a, dtype=None):
     elif isinstance(dtype, basestring):
         dtype = _dtype.DataType(dtype)
     return NDArray(ArrayUtil.zeros(shape, dtype._dtype))
+
+def empty_like(a, dtype=None):
+    """
+    Return a new array with the same shape and type as a given array.
+
+    :param a: (*array*) The shape and data-type of a define these same attributes of the returned array.
+    :param dtype: (*string*) Overrides the data type of the result. Default is ``None``, keep the data
+        type of array ``a``.
+
+    :returns: Array of uninitialized (arbitrary) data with the same shape and type as prototype.
+    """
+    shape = a.shape
+    if dtype is None:
+        dtype = a.dtype
+    elif isinstance(dtype, basestring):
+        dtype = _dtype.DataType(dtype)
+    return NDArray(ArrayUtil.empty(shape, dtype._dtype))
     
 def ones_like(a, dtype=None):
     '''
@@ -1029,26 +1049,22 @@ def cumsum(x, axis=None):
     :returns: (*array_like*) Cumulative sum result.
     """
     x = asarray(x)
-    if axis is None:
-        x = x.flatten()
-        axis = 0
-    
-    r = ArrayMath.cumsum(x.asarray(), axis)
+    r = x.cumsum(axis)
     if type(x) is NDArray:
-        return NDArray(r)
+        return r
     else:
         dims = []
         for i in range(0, x.ndim):
             dims.append(x.dims[i])
-        return DimArray(NDArray(r), dims, x.fill_value, x.proj)
+        return DimArray(r, dims, x.fill_value, x.proj)
             
 def mean(x, axis=None):
     """
     Compute tha arithmetic mean along the specified axis.
     
     :param x: (*array_like*) Input values.
-    :param axis: (*int*) Axis along which the standard deviation is computed. 
-        The default is to compute the standard deviation of the flattened array.
+    :param axis: (*int*) Axis along which the means is computed.
+        The default is to compute the means of the flattened array.
     
     returns: (*array_like*) Mean result
     """
@@ -1575,6 +1591,8 @@ def delnan(a):
     else:
         aa = []
         for a0 in a:
+            if not isinstance(a0, NDArray):
+                a0 = array(a0)
             aa.append(a0._array)
         r = ArrayMath.removeNaN(aa)
         rr = []
@@ -1603,6 +1621,20 @@ def nonzero(a):
     for aa in ra:
         r.append(NDArray(aa))
     return tuple(r)
+
+def flatnonzero(a):
+    '''
+    Return indices that are non-zero in the flattened version of a.
+
+    :param a: (*array_like*) Input array.
+
+    :returns: (*array*) Indices of elements that are non-zero.
+    '''
+    if isinstance(a, list):
+        a = array(a)
+    r = ArrayMath.flatNonZero(a.asarray())
+
+    return NDArray(r)
     
 def where(condition):
     '''
@@ -1989,6 +2021,9 @@ def broadcast_to(a, shape):
     
     :returns: (*NDArray*) A readonly view on the original array with the given shape.
     """
+    if isinstance(a, numbers.Number):
+        return full(shape, a)
+
     if isinstance(a, list):
         a = array(a)
     r = ArrayUtil.broadcast(a.asarray(), shape)
@@ -2016,44 +2051,7 @@ def corrcoef(x, y):
     b = ArrayMath.getR(y.asarray(), x.asarray())
     r = array([[1, a], [b, 1]])
     return r
-        
-def linregress(x, y):
-    '''
-    Calculate a linear least-squares regression for two sets of measurements.
-    
-    :param x, y: (*array_like*) Two sets of measurements. Both arrays should have the same length.
-    
-    :returns: Result slope, intercept, relative coefficient, two-sided p-value for a hypothesis test 
-        whose null hypothesis is that the slope is zero, standard error of the estimated gradient, 
-        validate data number (remove NaN values).
-    '''
-    if isinstance(x, list):
-        x = array(x)
-    if isinstance(y, list):
-        y = array(y)
-    r = ArrayMath.lineRegress(x.asarray(), y.asarray())
-    return r[0], r[1], r[2], r[3], r[4], r[5]
-    
-def polyval(p, x):
-    """
-    Evaluate a polynomial at specific values.
-    
-    If p is of length N, this function returns the value:
-    
-    p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
-    
-    If x is a sequence, then p(x) is returned for each element of x. If x is another polynomial then the 
-    composite polynomial p(x(t)) is returned.
-    
-    :param p: (*array_like*) 1D array of polynomial coefficients (including coefficients equal to zero) 
-        from highest degree to the constant term.
-    :param x: (*array_like*) A number, an array of numbers, or an instance of poly1d, at which to evaluate 
-        p.
-        
-    :returns: Polynomial value
-    """
-    return NDArray(ArrayMath.polyVal(p, x.asarray()))
-    
+
 def transpose(a, axes=None):
     '''
     Transpose 2-D array.
@@ -2064,6 +2062,8 @@ def transpose(a, axes=None):
     
     :returns: Transposed array.
     '''
+    if isinstance(a, (list, tuple)):
+        a = array(a)
     return a.transpose(axes)
 
 def swapaxes(a, axis1, axis2):
@@ -2076,6 +2076,66 @@ def swapaxes(a, axis1, axis2):
     :returns: Axes swapped array.
     '''
     return a.swapaxes(axis1, axis2)
+
+def moveaxis(a, source, destination):
+    """
+    Move axes of an array to new positions.
+    Other axes remain in their original order.
+    .. versionadded:: 1.11.0
+    Parameters
+    ----------
+    a : np.ndarray
+        The array whose axes should be reordered.
+    source : int or sequence of int
+        Original positions of the axes to move. These must be unique.
+    destination : int or sequence of int
+        Destination positions for each of the original axes. These must also be
+        unique.
+    Returns
+    -------
+    result : np.ndarray
+        Array with moved axes. This array is a view of the input array.
+    See Also
+    --------
+    transpose: Permute the dimensions of an array.
+    swapaxes: Interchange two axes of an array.
+    Examples
+    --------
+    >>> x = np.zeros((3, 4, 5))
+    >>> np.moveaxis(x, 0, -1).shape
+    (4, 5, 3)
+    >>> np.moveaxis(x, -1, 0).shape
+    (5, 3, 4)
+    These all achieve the same result:
+    >>> np.transpose(x).shape
+    (5, 4, 3)
+    >>> np.swapaxes(x, 0, -1).shape
+    (5, 4, 3)
+    >>> np.moveaxis(x, [0, 1], [-1, -2]).shape
+    (5, 4, 3)
+    >>> np.moveaxis(x, [0, 1, 2], [-1, -2, -3]).shape
+    (5, 4, 3)
+    """
+    try:
+        # allow duck-array types if they define transpose
+        transpose = a.transpose
+    except AttributeError:
+        a = asarray(a)
+        transpose = a.transpose
+
+    source = normalize_axis_tuple(source, a.ndim, 'source')
+    destination = normalize_axis_tuple(destination, a.ndim, 'destination')
+    if len(source) != len(destination):
+        raise ValueError('`source` and `destination` arguments must have '
+                         'the same number of elements')
+
+    order = [n for n in range(a.ndim) if n not in source]
+
+    for dest, src in sorted(zip(destination, source)):
+        order.insert(dest, src)
+
+    result = transpose(order)
+    return result
 
 def rot90(a, k=1):
     """
@@ -2159,7 +2219,169 @@ def rolling_mean(x, window, center=False):
     if isinstance(x, list):
         x = array(x)
     r = ArrayMath.rolling_mean(x.asarray(), window, center)
-    return NDArray(r)  
+    return NDArray(r)
+
+def roll(a, shift, axis=None):
+    """
+    Roll array elements along a given axis.
+    Elements that roll beyond the last position are re-introduced at
+    the first.
+    Parameters
+    ----------
+    a : array_like
+        Input array.
+    shift : int or tuple of ints
+        The number of places by which elements are shifted.  If a tuple,
+        then `axis` must be a tuple of the same size, and each of the
+        given axes is shifted by the corresponding number.  If an int
+        while `axis` is a tuple of ints, then the same value is used for
+        all given axes.
+    axis : int or tuple of ints, optional
+        Axis or axes along which elements are shifted.  By default, the
+        array is flattened before shifting, after which the original
+        shape is restored.
+    Returns
+    -------
+    res : ndarray
+        Output array, with the same shape as `a`.
+    See Also
+    --------
+    rollaxis : Roll the specified axis backwards, until it lies in a
+               given position.
+    Notes
+    -----
+    .. versionadded:: 1.12.0
+    Supports rolling over multiple dimensions simultaneously.
+    Examples
+    --------
+    >>> x = np.arange(10)
+    >>> np.roll(x, 2)
+    array([8, 9, 0, 1, 2, 3, 4, 5, 6, 7])
+    >>> np.roll(x, -2)
+    array([2, 3, 4, 5, 6, 7, 8, 9, 0, 1])
+    >>> x2 = np.reshape(x, (2,5))
+    >>> x2
+    array([[0, 1, 2, 3, 4],
+           [5, 6, 7, 8, 9]])
+    >>> np.roll(x2, 1)
+    array([[9, 0, 1, 2, 3],
+           [4, 5, 6, 7, 8]])
+    >>> np.roll(x2, -1)
+    array([[1, 2, 3, 4, 5],
+           [6, 7, 8, 9, 0]])
+    >>> np.roll(x2, 1, axis=0)
+    array([[5, 6, 7, 8, 9],
+           [0, 1, 2, 3, 4]])
+    >>> np.roll(x2, -1, axis=0)
+    array([[5, 6, 7, 8, 9],
+           [0, 1, 2, 3, 4]])
+    >>> np.roll(x2, 1, axis=1)
+    array([[4, 0, 1, 2, 3],
+           [9, 5, 6, 7, 8]])
+    >>> np.roll(x2, -1, axis=1)
+    array([[1, 2, 3, 4, 0],
+           [6, 7, 8, 9, 5]])
+    """
+    a = asanyarray(a)
+    if axis is None:
+        return roll(a.ravel(), shift, 0).reshape(a.shape)
+
+    else:
+        axis = normalize_axis_tuple(axis, a.ndim, allow_duplicate=True)
+        broadcasted = broadcast_to(shift, asanyarray(axis).shape)
+        shifts = {ax: 0 for ax in range(a.ndim)}
+        for ax, sh in zip(axis, broadcasted):
+            shifts[ax] += sh
+
+        rolls = [((slice(None), slice(None)),)] * a.ndim
+        for ax, offset in shifts.items():
+            offset %= a.shape[ax] or 1  # If `a` is empty, nothing matters.
+            if offset:
+                # (original, result), (original, result)
+                rolls[ax] = ((slice(None, -offset), slice(offset, None)),
+                             (slice(-offset, None), slice(None, offset)))
+
+        result = empty_like(a)
+        for indices in itertools.product(*rolls):
+            arr_index, res_index = zip(*indices)
+            result[res_index] = a[arr_index]
+
+        return result
+
+def normalize_axis_index(axis, ndim, argname=None):
+    """
+    Normalizes an axis index.
+
+    axis : int, iterable of int
+        The un-normalized index or indices of the axis.
+    ndim : int
+        The number of dimensions of the array that `axis` should be normalized
+        against.
+    argname : str, optional
+        A prefix to put before the error message, typically the name of the
+        argument.
+    Returns
+    -------
+    normalized_axes : tuple of int
+        The normalized axis index, such that `0 <= normalized_axis < ndim`
+    """
+    if axis >= ndim or axis + ndim < 0:
+        if argname:
+            raise ValueError('AxisError: {}: axis {} is out of bounds for array of dimension {}'.format(argname, axis, ndim))
+        else:
+            raise ValueError('AxisError: axis {} is out of bounds for array of dimension {}'.format(axis, ndim))
+
+    return axis if axis >= 0 else ndim + axis
+
+def normalize_axis_tuple(axis, ndim, argname=None, allow_duplicate=False):
+    """
+    Normalizes an axis argument into a tuple of non-negative integer axes.
+    This handles shorthands such as ``1`` and converts them to ``(1,)``,
+    as well as performing the handling of negative indices covered by
+    `normalize_axis_index`.
+    By default, this forbids axes from being specified multiple times.
+    Used internally by multi-axis-checking logic.
+    .. versionadded:: 1.13.0
+    Parameters
+    ----------
+    axis : int, iterable of int
+        The un-normalized index or indices of the axis.
+    ndim : int
+        The number of dimensions of the array that `axis` should be normalized
+        against.
+    argname : str, optional
+        A prefix to put before the error message, typically the name of the
+        argument.
+    allow_duplicate : bool, optional
+        If False, the default, disallow an axis from being specified twice.
+    Returns
+    -------
+    normalized_axes : tuple of int
+        The normalized axis index, such that `0 <= normalized_axis < ndim`
+    Raises
+    ------
+    AxisError
+        If any axis provided is out of range
+    ValueError
+        If an axis is repeated
+    See also
+    --------
+    normalize_axis_index : normalizing a single scalar axis
+    """
+    # Optimization to speed-up the most common cases.
+    if type(axis) not in (tuple, list):
+        try:
+            axis = [operator.index(axis)]
+        except TypeError:
+            pass
+    # Going via an iterator directly is slower than via list comprehension.
+    axis = tuple([normalize_axis_index(ax, ndim, argname) for ax in axis])
+    if not allow_duplicate and len(set(axis)) != len(axis):
+        if argname:
+            raise ValueError('repeated axis in `{}` argument'.format(argname))
+        else:
+            raise ValueError('repeated axis')
+    return axis
     
 def smooth5(x):
     '''
@@ -2369,38 +2591,6 @@ def asgridarray(data, x=None, y=None, fill_value=-9999.0):
 def asstationdata(data, x, y, fill_value=-9999.0):
     stdata = StationData(data.asarray(), x.asarray(), y.asarray(), fill_value)
     return PyStationData(stdata)
-
-def linint2(*args, **kwargs):
-    """
-    Interpolates from a rectilinear grid to another rectilinear grid using bilinear interpolation.
-    
-    :param x: (*array_like*) X coordinate array of the sample data (one dimension).
-    :param y: (*array_like*) Y coordinate array of the sample data (one dimension).
-    :param z: (*array_like*) Value array of the sample data (muti-dimension, last two dimensions are y and x).
-    :param xq: (*array_like*) X coordinate array of the query data (one dimension).
-    :param yq: (*array_like*) Y coordinate array of the query data (one dimension).
-    
-    :returns: (*array_like*) Interpolated array.
-    """
-    if len(args) == 3:
-        z = args[0]
-        x = z.dimvalue(z.ndim - 1)
-        y = z.dimvalue(z.ndim - 2)
-        xq = args[1]
-        yq = args[2]
-    else:
-        x = args[0]
-        y = args[1]
-        z = args[2]
-        xq = args[3]
-        yq = args[4]
-    x = array(x)._array
-    y = array(y)._array
-    z = array(z)._array
-    xq = array(xq)._array
-    yq = array(yq)._array
-    r = ArrayUtil.linint2(z, x, y, xq, yq)
-    return NDArray(r)
     
 def interp2d(*args, **kwargs):
     """
@@ -2486,8 +2676,8 @@ def griddata(points, values, xi=None, **kwargs):
     :param values: (*array_like*) The scattered data array.
     :param xi: (*list*) The list contains x and y coordinate arrays of the grid data. Default is ``None``,
         the grid x and y coordinate size were both 500.
-    :param method: (*string*) The interpolation method. [idw | cressman | nearest | inside | inside_min
-        | inside_max | inside_count | surface | barnes]
+    :param method: (*string*) The interpolation method. [idw | cressman | nearest | inside_mean | inside_min
+        | inside_max | inside_sum | inside_count | surface | barnes]
     :param fill_value: (*float*) Fill value, Default is ``nan``.
     :param pointnum: (*int*) Only used for 'idw' method. The number of the points to be used for each grid
         value interpolation.
@@ -2580,6 +2770,9 @@ def griddata(points, values, xi=None, **kwargs):
     elif method == 'inside_min':
         centerpoint = kwargs.pop('centerpoint', True)
         r = InterpUtil.interpolation_Inside_Min(x_s.aslist(), y_s.aslist(), values, x_g.aslist(), y_g.aslist(), centerpoint)
+    elif method == 'inside_sum':
+        centerpoint = kwargs.pop('centerpoint', True)
+        r = InterpUtil.interpolation_Inside_Sum(x_s.aslist(), y_s.aslist(), values, x_g.aslist(), y_g.aslist(), centerpoint)
     elif method == 'inside_count':
         centerpoint = kwargs.pop('centerpoint', True)
         r = InterpUtil.interpolation_Inside_Count(x_s.aslist(), y_s.aslist(), x_g.aslist(), y_g.aslist(), True, centerpoint)
@@ -2660,7 +2853,7 @@ def joinncfile(infns, outfn, tdimname):
     
     :returns: Joined netCDF file.
     '''
-    NetCDFDataInfo.joinDataFiles(infns, outfn, tdimname)    
+    NetCDFDataInfo.joinDataFiles(infns, outfn, tdimname)
     
 # Get month abstract English name
 def monthname(m):  

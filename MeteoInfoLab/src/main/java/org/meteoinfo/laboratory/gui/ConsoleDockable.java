@@ -8,6 +8,7 @@ package org.meteoinfo.laboratory.gui;
 import bibliothek.gui.dock.common.DefaultSingleCDockable;
 import bibliothek.gui.dock.common.action.CAction;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
+import org.meteoinfo.chart.jogl.GLChartPanel;
 import org.meteoinfo.console.ConsoleColors;
 import org.meteoinfo.console.JConsole;
 import java.awt.BorderLayout;
@@ -301,6 +302,9 @@ public class ConsoleDockable extends DefaultSingleCDockable {
                 IChartPanel cp = parent.getFigureDock().getCurrentFigure();
                 if (cp != null) {
                     cp.paintGraphics();
+                    if (cp instanceof GLChartPanel) {
+                        ((GLChartPanel) cp).display();
+                    }
                 }
             }
         };
@@ -333,6 +337,7 @@ public class ConsoleDockable extends DefaultSingleCDockable {
                 }
             }
             this.interp.console.print(">>> ", consoleColors.getPromptColor());
+            this.interp.console.setStyle(consoleColors.getCommandColor());
         } catch (IOException ex) {
             Logger.getLogger(ConsoleDockable.class.getName()).log(Level.SEVERE, null, ex);
         }
